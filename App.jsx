@@ -444,7 +444,7 @@ export default function TeamManager() {
   // Status & Metadata
   const [projectStatus, setProjectStatus] = useState(null);
   const [lastSaved, setLastSaved] = useState(null);
-  const [projectTitle, setProjectTitle] = useState('Proyek Pemeriksaan Baru');
+  const [projectTitle, setProjectTitle] = useState('Proyek Untitled');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
 
@@ -586,7 +586,7 @@ export default function TeamManager() {
     const h = String(now.getHours()).padStart(2,'0'); const m = String(now.getMinutes()).padStart(2,'0'); const s = String(now.getSeconds()).padStart(2,'0');
     const statusObj = PROJECT_STATUSES.find(st => st.id === statusId);
     const shortStatus = statusObj ? statusObj.shortCode : 'Draft';
-    link.download = `SUNTIM_${shortStatus}_${Y}-${M}-${D}_${h}${m}${s}.suntim`; 
+    link.download = `SUNTIM_${projectTitle}_${Y}-${M}-${D}_${h}${m}${s}_${shortStatus}.suntim`; 
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
     setShowStatusModal(false);
   };
@@ -1017,7 +1017,7 @@ export default function TeamManager() {
              doc.text(`Halaman ${i} dari ${totalPages}`, pageWidth - 14, pageHeight - 10, { align: 'right' });
         }
 
-        doc.save(`SUNTIM_${projectTitle}_${timestamp}.pdf`);
+        doc.save(`SUNTIM_${projectTitle}_${timestamp}_${statusLabel}.pdf`);
        } catch (err) {
            console.error("PDF Fail:", err);
            alert("Gagal membuat PDF. Cek console untuk detail.");
