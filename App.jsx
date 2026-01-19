@@ -618,21 +618,22 @@ export default function TeamManager() {
         let tableHTML = `<html xmlns:x="urn:schemas-microsoft-com:office:excel">
         <head><meta http-equiv="content-type" content="text/plain; charset=UTF-8"/></head><body>`;
         
+        // Single table header
+        tableHTML += `<table border="1"><thead><tr style="background-color:#eee;"><th>OBRIK</th><th>NO</th><th>NAMA</th><th>PERAN</th><th>JABATAN</th><th>LATAR PENDIDIKAN</th></tr></thead><tbody>`;
+
+        let globalNo = 1;
         objects.forEach(obj => {
-            tableHTML += `<h3>${obj.name}</h3><table border="1"><thead><tr style="background-color:#eee;"><th>NO</th><th>NAMA</th><th>PERAN</th><th>JABATAN</th><th>LATAR PENDIDIKAN</th></tr></thead><tbody>`;
-            let no = 1;
             ROLES.forEach(role => {
                 const count = obj.slots[role.key];
                 for(let i=0; i<count; i++) {
                     const ex = getExaminerInSlot(obj.id, role.key, i);
                     if(ex) {
-                        tableHTML += `<tr><td>${no++}</td><td>${ex.name}</td><td>${role.label}</td><td>${ex.jabatan}</td><td>${ex.edu}</td></tr>`;
+                        tableHTML += `<tr><td>${obj.name}</td><td>${globalNo++}</td><td>${ex.name}</td><td>${role.label}</td><td>${ex.jabatan}</td><td>${ex.edu}</td></tr>`;
                     }
                 }
             });
-            tableHTML += `</tbody></table><br/>`;
         });
-        tableHTML += `</body></html>`;
+        tableHTML += `</tbody></table></body></html>`;
 
         const blob = new Blob([tableHTML], { type: 'application/vnd.ms-excel' });
         const url = URL.createObjectURL(blob);
