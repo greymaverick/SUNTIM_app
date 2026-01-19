@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { 
   Plus, Trash2, Users, User, GripVertical, Save, Briefcase, 
   X, Sparkles, Menu, ChevronRight, ChevronDown, FileSpreadsheet, 
@@ -44,28 +46,9 @@ const PROJECT_STATUSES = [
   { id: 'final', label: 'Final/Surat Tugas Terbit', shortCode: 'FINAL', color: 'bg-green-100 text-green-700 border-green-200' },
 ];
 
-const INITIAL_EXAMINERS = [
-  { id: 'p1', name: 'Budi Santoso', nip_bpk: '240001234', nip_18: '198001012000031001', jabatan: 'Pemeriksa Ahli Madya', edu: 'S2 Akuntansi', gender: 'L', status: true, reason: '', photo: '' },
-  { id: 'p2', name: 'Siti Aminah', nip_bpk: '240005678', nip_18: '198502022005032002', jabatan: 'Pemeriksa Ahli Muda', edu: 'S1 Hukum', gender: 'P', status: true, reason: '', photo: '' },
-  { id: 'p3', name: 'I Gede Putu Eka', nip_bpk: '240009101', nip_18: '199003032010031003', jabatan: 'Pemeriksa Ahli Pertama', edu: 'S1 Teknik Sipil', gender: 'L', status: true, reason: '', photo: '' },
-  { id: 'p4', name: 'Anak Agung Bagus Suteja', nip_bpk: '240001121', nip_18: '199204042014031004', jabatan: 'Pemeriksa Ahli Pertama', edu: 'S1 Ekonomi', gender: 'L', status: true, reason: '', photo: '' },
-  { id: 'p5', name: 'Eko Prasetyo', nip_bpk: '240003141', nip_18: '199505052018031005', jabatan: 'Pemeriksa Ahli Pertama', edu: 'S1 Informatika', gender: 'L', status: true, reason: '', photo: '' },
-  { id: 'p6', name: 'Fajar Nugraha', nip_bpk: '240005161', nip_18: '198806062009031006', jabatan: 'Pemeriksa Ahli Muda', edu: 'S2 Manajemen', gender: 'L', status: false, reason: 'Cuti Melahirkan', photo: '' },
-  { id: 'p7', name: 'Ni Made Ayu', nip_bpk: '240007181', nip_18: '199307072015032007', jabatan: 'Pemeriksa Ahli Pertama', edu: 'S1 Akuntansi', gender: 'P', status: true, reason: '', photo: '' },
-];
+const INITIAL_EXAMINERS = [];
 
-const INITIAL_OBJECTS = [
-  { 
-    id: 'obj1', 
-    name: 'LKPD Pemprov Bali', 
-    slots: { PJ: 1, WPJ: 2, PT: 2, KT: 1, KST: 2, AT: 6, Dukrik: 0 } 
-  },
-  { 
-    id: 'obj2', 
-    name: 'LKPD Pemkab Badung', 
-    slots: { PJ: 1, WPJ: 2, PT: 2, KT: 1, KST: 2, AT: 5, Dukrik: 0 } 
-  }
-];
+const INITIAL_OBJECTS = [];
 
 // --- Helpers ---
 
@@ -459,7 +442,7 @@ export default function TeamManager() {
   const [assignments, setAssignments] = useState({});
 
   // Status & Metadata
-  const [projectStatus, setProjectStatus] = useState('draft');
+  const [projectStatus, setProjectStatus] = useState(null);
   const [lastSaved, setLastSaved] = useState(null);
   const [projectTitle, setProjectTitle] = useState('Proyek Pemeriksaan Baru');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -498,10 +481,10 @@ export default function TeamManager() {
 
   // --- Persistence ---
   useEffect(() => {
-    const savedObj = localStorage.getItem('bpk_suntim_objects_v16');
-    const savedExam = localStorage.getItem('bpk_suntim_examiners_v16');
-    const savedAssign = localStorage.getItem('bpk_suntim_assignments_v16');
-    const savedMeta = localStorage.getItem('bpk_suntim_meta_v16');
+    const savedObj = localStorage.getItem('bpk_suntim_objects_v17');
+    const savedExam = localStorage.getItem('bpk_suntim_examiners_v17');
+    const savedAssign = localStorage.getItem('bpk_suntim_assignments_v17');
+    const savedMeta = localStorage.getItem('bpk_suntim_meta_v17');
     
     if (savedObj) setObjects(JSON.parse(savedObj));
     if (savedExam) setExaminers(JSON.parse(savedExam));
@@ -515,10 +498,10 @@ export default function TeamManager() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('bpk_suntim_objects_v16', JSON.stringify(objects));
-    localStorage.setItem('bpk_suntim_examiners_v16', JSON.stringify(examiners));
-    localStorage.setItem('bpk_suntim_assignments_v16', JSON.stringify(assignments));
-    localStorage.setItem('bpk_suntim_meta_v16', JSON.stringify({ title: projectTitle, status: projectStatus, lastSaved }));
+    localStorage.setItem('bpk_suntim_objects_v17', JSON.stringify(objects));
+    localStorage.setItem('bpk_suntim_examiners_v17', JSON.stringify(examiners));
+    localStorage.setItem('bpk_suntim_assignments_v17', JSON.stringify(assignments));
+    localStorage.setItem('bpk_suntim_meta_v17', JSON.stringify({ title: projectTitle, status: projectStatus, lastSaved }));
   }, [objects, examiners, assignments, projectTitle, projectStatus, lastSaved]);
 
   // Handle PDF Print Event
@@ -659,8 +642,386 @@ export default function TeamManager() {
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
     } 
     else if (type === 'pdf') {
-        document.title = `Konsep Susunan Tim Pemeriksaan ${projectTitle}`;
-        setIsPrinting(true); // Triggers useEffect to print
+       try {
+        const doc = new jsPDF('portrait');
+        let finalY = 30; // Initial start Y
+
+        // Helper for colors
+        const getStatusColor = (colorClass) => {
+            if (!colorClass) return [0, 0, 0];
+            if (colorClass.includes('red')) return [185, 28, 28];
+            if (colorClass.includes('orange')) return [194, 65, 12];
+            if (colorClass.includes('yellow')) return [161, 98, 7];
+            if (colorClass.includes('blue')) return [29, 78, 216];
+            if (colorClass.includes('green')) return [21, 128, 61];
+            return [0, 0, 0];
+        };
+
+        const drawFooter = (doc) => {
+            const pageSize = doc.internal.pageSize;
+            const pageHeight = pageSize.height;
+            const pageWidth = pageSize.width;
+
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            
+            // Left Footer: Status
+            const statusText = `Status: ${currentStatus ? currentStatus.label : 'Draft'}`;
+            const timeText = lastSaved ? formatDate(lastSaved) : '';
+            
+            // Style Status
+            const color = getStatusColor(currentStatus?.color);
+            doc.setTextColor(...color);
+            doc.setFont("helvetica", "bold");
+            doc.text(statusText, 14, pageHeight - 15);
+            
+            // Reset Text Color for other footer items
+            doc.setTextColor(0,0,0);
+            doc.setFont("helvetica", "normal");
+            doc.text(timeText, 14, pageHeight - 10);
+            
+            // Center Footer
+            doc.text("dicetak dari Aplikasi SUNTIM © DAC BPK Bali", pageWidth / 2, pageHeight - 10, { align: 'center' });
+        };
+
+        const drawHeader = (doc) => {
+             doc.setFontSize(14);
+             doc.setFont("helvetica", "bold");
+             doc.setTextColor(0,0,0);
+             doc.text(`Konsep Susunan Tim Pemeriksaan ${projectTitle}`, doc.internal.pageSize.width / 2, 15, { align: 'center' });
+        };
+        
+        drawHeader(doc); // Draw header on first page
+        
+        objects.forEach((obj, index) => {
+            // Check space
+            if (finalY > doc.internal.pageSize.height - 40) {
+                doc.addPage();
+                drawHeader(doc);
+                finalY = 30; // Reset Y on new page
+            }
+            
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(0,0,0); // Ensure black
+            doc.text(`${index + 1}. ${obj.name}`, 14, finalY);
+            
+            const tableRows = [];
+            let no = 1;
+
+            ROLES.forEach(role => {
+                const count = obj.slots[role.key] || 0;
+                for (let k = 0; k < count; k++) {
+                    const ex = getExaminerInSlot(obj.id, role.key, k);
+                    if (ex) {
+                        tableRows.push([no++, ex.name, role.label, ex.nip_bpk, ex.jabatan, ex.edu]);
+                    }
+                }
+            });
+
+            if (tableRows.length === 0) tableRows.push(['-', 'Belum ada personil', '-', '-', '-', '-']);
+
+            autoTable(doc, {
+                startY: finalY + 5,
+                head: [['No', 'Nama', 'Peran', 'NIP BPK', 'Jabatan', 'Latar Pendidikan']],
+                body: tableRows,
+                theme: 'grid',
+                headStyles: { fillColor: [220, 220, 220], textColor: [0, 0, 0], fontStyle: 'bold' },
+                styles: { fontSize: 10, cellPadding: 2 },
+                columnStyles: { 0: { cellWidth: 10, halign: 'center' }, 2: { cellWidth: 35 }, 3: { cellWidth: 30 } },
+                showHead: 'everyPage', // Repeat header
+                margin: { bottom: 20 }, // Reserve footer space
+                didDrawPage: (data) => {
+                    drawFooter(doc);
+                }
+            });
+
+            finalY = doc.lastAutoTable.finalY + 10; // Spacing for next section
+        });
+
+        // --- ANALYTICS SECTION ---
+        doc.addPage();
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0,0,0);
+        doc.text(`Analitik Konsep Susunan Tim Pemeriksaan ${projectTitle}`, doc.internal.pageSize.width / 2, 15, { align: 'center' });
+        
+        // Manual footer for the analytics title page (in case tables pushed to next page, though unlikely if empty)
+        // But autoTables will handle it if they draw. If they fit, didDrawPage fires.
+        
+        finalY = 30;
+
+        // 1. RECAP TABLE
+        doc.setFontSize(12);
+        doc.text("1. Rekapitulasi Pemeriksa per Obrik", 14, finalY);
+        
+        const recapHead = [['Objek Pemeriksaan', ...ROLES.map(r => r.short), 'Total']];
+        const recapBody = objects.map(obj => {
+            const counts = ROLES.map(r => {
+                let count = 0;
+                const objAssigns = assignments[obj.id] || {};
+                Object.keys(objAssigns).forEach(k => { if (k.startsWith(r.key)) count++; });
+                return count;
+            });
+            const total = counts.reduce((a, b) => a + b, 0);
+            return [obj.name, ...counts, total];
+        });
+        
+        // Add Total Row
+        const recapTotals = [];
+        ROLES.forEach((_, i) => {
+            recapTotals.push(recapBody.reduce((acc, row) => acc + (row[i+1] || 0), 0));
+        });
+        recapBody.push(['Total Keseluruhan', ...recapTotals, recapTotals.reduce((a,b)=>a+b,0)]);
+
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: recapHead,
+            body: recapBody,
+            theme: 'grid',
+            headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 2, halign: 'center' },
+            columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } }, // Objek name left align
+            didParseCell: (data) => {
+                 if (data.row.index === recapBody.length - 1) data.cell.styles.fontStyle = 'bold'; // Bold total row
+            },
+            didDrawPage: (data) => drawFooter(doc)
+        });
+
+        finalY = doc.lastAutoTable.finalY + 10;
+
+        // 2. MATRIX JABATAN (Unique Person Logic)
+        doc.setFontSize(12);
+        doc.text("2. Matriks Sebaran: Jabatan vs Peran Tim", 14, finalY);
+
+        // Calc Matrix [Jabatan][Role] = Set(ids)
+        let matrixJabatan = {}; 
+        Object.keys(assignments).forEach(objId => {
+          Object.keys(assignments[objId]).forEach(slotKey => {
+            const roleKey = slotKey.split('_')[0];
+            const exId = assignments[objId][slotKey];
+            const ex = examiners.find(e => e.id === exId);
+            if (ex) {
+              if (!matrixJabatan[ex.jabatan]) matrixJabatan[ex.jabatan] = {};
+              if (!matrixJabatan[ex.jabatan][roleKey]) matrixJabatan[ex.jabatan][roleKey] = new Set();
+              matrixJabatan[ex.jabatan][roleKey].add(ex.id);
+            }
+          });
+        });
+
+        const sortedJabatans = Object.keys(matrixJabatan).sort((a, b) => (JOB_RANK[a] || 99) - (JOB_RANK[b] || 99));
+        
+        const matBody = sortedJabatans.map(jab => {
+             const row = [jab];
+             let rTotal = 0;
+             ROLES.forEach(r => {
+                 const uniqueSet = matrixJabatan[jab][r.key] || new Set();
+                 const count = uniqueSet.size;
+                 row.push(count || '-');
+                 rTotal += count;
+             });
+             row.push(rTotal);
+             return row;
+        });
+
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [['Jabatan \\ Peran', ...ROLES.map(r => r.short), 'Total']],
+            body: matBody,
+            theme: 'grid',
+            headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 2, halign: 'center' },
+            columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } },
+            didDrawPage: (data) => drawFooter(doc)
+        });
+
+        finalY = doc.lastAutoTable.finalY + 10;
+
+        // 3. EDU MATRIX (Filtered by isTech)
+        doc.setFontSize(12);
+        doc.text("3. Matriks Sebaran: Latar Pendidikan vs Obrik", 14, finalY);
+
+        const uniqueEdu = [...new Set(examiners.map(e => e.edu).filter(e => e))].sort();
+        const eduHead = [['Latar Pendidikan', ...objects.map(o => o.name), 'Total']];
+        const eduBody = uniqueEdu.map(edu => {
+             const row = [edu];
+             let rTotal = 0;
+             objects.forEach(obj => {
+                 let count = 0;
+                 const objAssigns = assignments[obj.id] || {};
+                 Object.keys(objAssigns).forEach(slotKey => {
+                     const rKey = slotKey.split('_')[0];
+                     const rConfig = ROLES.find(r => r.key === rKey);
+                     if (rConfig?.isTech) {
+                         const exId = objAssigns[slotKey];
+                         const ex = examiners.find(e => e.id === exId);
+                         if (ex && ex.edu === edu) count++;
+                     }
+                 });
+                 row.push(count || '-');
+                 rTotal += count;
+             });
+             row.push(rTotal);
+             return row;
+        });
+
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: eduHead,
+            body: eduBody,
+            theme: 'grid',
+            headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 2, halign: 'center' },
+            columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } },
+            didDrawPage: (data) => drawFooter(doc)
+        });
+
+        finalY = doc.lastAutoTable.finalY + 10;
+
+        // Check space for next section
+        if (finalY > doc.internal.pageSize.height - 40) {
+            doc.addPage();
+            finalY = 30; // Reset Y on new page
+        }
+
+        // 4. GENDER (Filtered by isTech)
+        doc.setFontSize(12);
+        doc.text("4. Komposisi berdasarkan Jenis Kelamin", 14, finalY);
+        
+        // const genderHead = [['Objek Pemeriksaan', 'Laki-laki', 'Perempuan']]; // Not used in graph
+        const genderBody = objects.map(obj => {
+             let L = 0, P = 0;
+             const objAssigns = assignments[obj.id] || {};
+             Object.keys(objAssigns).forEach(slotKey => {
+                 const rKey = slotKey.split('_')[0];
+                 const rConfig = ROLES.find(r => r.key === rKey);
+                 if (rConfig?.isTech) {
+                     const exId = objAssigns[slotKey];
+                     const ex = examiners.find(e => e.id === exId);
+                     if (ex) {
+                         if (ex.gender === 'L') L++;
+                         else P++;
+                     }
+                 }
+             });
+             return [obj.name, L, P];
+        });
+
+        // Graphic Implementation for Gender
+        let maxVal = 0;
+        genderBody.forEach(row => {
+            if (row[1] > maxVal) maxVal = row[1];
+            if (row[2] > maxVal) maxVal = row[2];
+        });
+        if (maxVal === 0) maxVal = 1;
+
+        let currentY = finalY + 5;
+        
+        // Check space for Header
+        if (currentY > doc.internal.pageSize.height - 40) {
+            doc.addPage();
+            drawFooter(doc);
+            currentY = 30;
+        }
+
+        // Legend/Header
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text("Objek Pemeriksaan", 14, currentY);
+        
+        // Center alignment guide
+        const centerX = 160;
+        doc.text("Laki-laki", centerX - 10, currentY, { align: 'right' });
+        doc.text("Perempuan", centerX + 10, currentY, { align: 'left' });
+        
+        currentY += 3;
+        doc.setDrawColor(200, 200, 200);
+        doc.line(14, currentY, 196, currentY);
+        currentY += 5;
+
+        const barHeight = 5;
+        const gap = 4;
+        const maxBarWidth = 35; 
+
+        genderBody.forEach((row) => {
+             if (currentY > doc.internal.pageSize.height - 30) {
+                 doc.addPage();
+                 drawFooter(doc);
+                 currentY = 30;
+                 doc.setFontSize(12);
+                 doc.setFont("helvetica", "bold");
+                 doc.setTextColor(0,0,0);
+                 doc.text("4. Komposisi berdasarkan Jenis Kelamin (Lanjutan)", 14, currentY);
+                 currentY += 15;
+             }
+
+             const objName = row[0];
+             const countL = row[1];
+             const countP = row[2];
+
+             doc.setFontSize(8);
+             doc.setTextColor(0,0,0);
+             doc.setFont("helvetica", "normal");
+             
+             // Wrap text if too long
+             const splitName = doc.splitTextToSize(objName, 100); 
+             doc.text(splitName, 14, currentY + barHeight/2 + 1.5);
+
+             // Draw Bars
+             const wL = (countL / maxVal) * maxBarWidth;
+             if (countL > 0) {
+                 doc.setFillColor(59, 130, 246); // Blue
+                 doc.rect(centerX - wL - 2, currentY, wL, barHeight, 'F');
+                 doc.setTextColor(255, 255, 255);
+                 doc.setFont("helvetica", "bold");
+                 if(wL > 4) doc.text(`${countL}`, centerX - 4, currentY + barHeight - 1.5, { align: 'right' });
+             } else {
+                 doc.setTextColor(200, 200, 200);
+                 doc.text("-", centerX - 5, currentY + barHeight - 1.5, { align: 'right' });
+             }
+
+             const wP = (countP / maxVal) * maxBarWidth;
+             if (countP > 0) {
+                 doc.setFillColor(236, 72, 153); // Pink
+                 doc.rect(centerX + 2, currentY, wP, barHeight, 'F');
+                 doc.setTextColor(255, 255, 255);
+                 doc.setFont("helvetica", "bold");
+                 if(wP > 4) doc.text(`${countP}`, centerX + 4, currentY + barHeight - 1.5, { align: 'left' });
+             } else {
+                 doc.setTextColor(200, 200, 200);
+                 doc.text("-", centerX + 5, currentY + barHeight - 1.5, { align: 'left' });
+             }
+             
+             // Dynamic height based on lines of text
+             const namesHeight = splitName.length * 4; // approx 4mm per line
+             const rowHeight = Math.max(namesHeight, barHeight) + gap;
+             currentY += rowHeight;
+        });
+        
+        drawFooter(doc);
+
+        // 3. Page Number Loop
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+             doc.setPage(i);
+             const pageSize = doc.internal.pageSize;
+             const pageHeight = pageSize.height;
+             const pageWidth = pageSize.width;
+             
+             doc.setFillColor(255, 255, 255);
+             doc.rect(pageWidth - 40, pageHeight - 15, 30, 10, 'F'); 
+             
+             doc.setFontSize(8);
+             doc.setTextColor(0,0,0);
+             doc.setFont("helvetica", "normal");
+             doc.text(`Halaman ${i} dari ${totalPages}`, pageWidth - 14, pageHeight - 10, { align: 'right' });
+        }
+
+        doc.save(`SUNTIM_${projectTitle}_${timestamp}.pdf`);
+       } catch (err) {
+           console.error("PDF Fail:", err);
+           alert("Gagal membuat PDF. Cek console untuk detail.");
+       }
     }
   };
 
@@ -762,18 +1123,19 @@ export default function TeamManager() {
         {sidebarOpen && (
             <div className="flex flex-col">
                 <span className="font-bold text-white tracking-wider text-lg">{APP_NAME}</span>
-                <span className="text-[10px] text-slate-400 font-medium tracking-tight whitespace-nowrap overflow-hidden">{APP_SUBTITLE}</span>
+                <span className="text-xs text-slate-400 font-medium tracking-tight leading-tight block mt-0.5">Tools Penyusunan dan Analitik<br/>Susunan Tim Pemeriksa</span>
             </div>
         )}
-        <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-slate-800 rounded">
-            {/* Fallback to Icon if image missing */}
+        <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-slate-800 rounded group">
+            {/* Use sidebar_logo.png if available */}
             <img 
-                src="icon.jpg" 
-                alt="Menu" 
-                className="w-6 h-6 rounded" 
+                src="logo.png" 
+                alt="Logo" 
+                className="w-12 h-12 rounded object-contain" 
                 onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }} 
             />
-            <ShieldCheck className="w-6 h-6 hidden text-amber-500" />
+            {/* Fallback Icon */}
+            <ShieldCheck className="w-10 h-10 hidden text-amber-500 group-hover:text-amber-400 transition-colors" />
         </button>
       </div>
       <div className="flex-1 overflow-y-auto py-4 space-y-2">
@@ -794,7 +1156,17 @@ export default function TeamManager() {
           </button>
         </div>
       </div>
-      {sidebarOpen && <div className="p-4 border-t border-slate-800 text-center font-sans text-xs text-slate-400 font-light"><div>Aplikasi {APP_NAME} v1.0</div><div>&copy; {YEAR} {DEVELOPER_NAME}</div></div>}
+      {sidebarOpen && (
+          <div className="p-4 border-t border-slate-800 text-center font-sans text-xs text-slate-400 font-light">
+              <div className="flex justify-center gap-6 mb-3 opacity-90">
+                  {/* Pastikan file BPK.png dan SINER6I.png ada di folder proyek */}
+                  <img src="BPK.png" alt="BPK" className="h-16 w-auto object-contain" onError={(e) => e.target.style.display='none'} />
+                  <img src="SINER6I.png" alt="Sinergi" className="h-16 w-auto object-contain" onError={(e) => e.target.style.display='none'} />
+              </div>
+              <div className="mb-1">Aplikasi {APP_NAME} v1.0</div>
+              <div>&copy; {YEAR} <a href="http://bpk.id/dacbpkbali" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500 hover:underline transition-colors">{DEVELOPER_NAME}</a></div>
+          </div>
+      )}
     </div>
   );
 
@@ -902,7 +1274,16 @@ export default function TeamManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {processedData.map((ex, idx) => (
+              {processedData.length === 0 ? (
+                 <tr>
+                    <td colSpan="9" className="py-10 text-center">
+                        <Users className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                        <p className="text-slate-500 font-medium">Belum ada Data Pemeriksa</p>
+                        <p className="text-xs text-slate-400 mt-1">Silakan tambah pemeriksa atau impor daftar pemeriksa</p>
+                    </td>
+                 </tr>
+              ) : (
+              processedData.map((ex, idx) => (
                 <tr key={ex.id} className={`hover:bg-slate-50 ${!ex.status ? 'bg-slate-50/50' : ''}`} draggable onDragStart={() => { dragRow.current = idx; }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (dragRow.current !== null) { moveExaminerRow(dragRow.current, idx); dragRow.current = null; } }}>
                   <td className="px-4 py-3 text-center cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500"><GripVertical className="w-4 h-4" /></td>
                   <td className="px-4 py-3 text-center text-slate-500">{idx + 1}</td>
@@ -914,7 +1295,8 @@ export default function TeamManager() {
                   <td className="px-4 py-3 text-center"><button onClick={() => toggleStatus(ex.id)} className={`px-3 py-1 rounded-full text-xs font-semibold border ${ex.status ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>{ex.status ? 'ON' : 'OFF'}</button></td>
                   <td className="px-4 py-3"><div className="flex justify-center gap-1"><button onClick={() => { setEditingExaminer(ex); setShowExaminerModal(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><User className="w-4 h-4"/></button><button onClick={() => deleteExaminer(ex.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4"/></button></div></td>
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
         </div>
@@ -928,9 +1310,9 @@ export default function TeamManager() {
 
     return (
       <div className="space-y-6 pb-20 relative print:hidden">
-        <div className="flex justify-between items-center sticky top-0 bg-slate-50 py-4 z-30 border-b border-slate-200">
+        <div className="flex justify-between items-center sticky top-0 bg-slate-50 py-4 z-[60] border-b border-slate-200">
           <div>
-              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><ShieldCheck className="w-6 h-6 text-amber-500" />Workspace Penyusunan Tim</h2>
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">Workspace Penyusunan Tim</h2>
           </div>
           <div className="flex gap-2 items-center">
             <input type="file" accept=".suntim" ref={backupInputRef} className="hidden" onChange={handleBackupFileChange} />
@@ -975,18 +1357,28 @@ export default function TeamManager() {
             ) : (
                 <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setTempTitle(projectTitle); setIsEditingTitle(true); }}>
                     <h1 className="text-lg font-bold text-slate-700 hover:text-blue-600">{projectTitle}</h1>
-                    <Pencil className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Pencil className="w-4 h-4 text-slate-400" />
                 </div>
             )}
         </div>
 
         <div className="flex items-center gap-2 mb-2 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
            <CalendarClock className="w-5 h-5 text-slate-400" />
-           <div className="text-sm text-slate-600">Status Konsep Susunan Tim: <span className={`font-bold px-2 py-0.5 rounded ${currentStatus?.color}`}>{currentStatus?.label}</span>{lastSaved && <span className="ml-2 text-xs text-slate-400">- {formatDate(lastSaved)}</span>}</div>
+           <div className="text-sm text-slate-600">Status Konsep Susunan Tim: <span className={`font-bold px-2 py-0.5 rounded ${currentStatus?.color || 'bg-slate-100 text-slate-500'}`}>{currentStatus?.label || '--------'}</span><span className="ml-2 text-xs text-slate-400">- {lastSaved ? formatDate(lastSaved) : '--------'}</span></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
-          {objects.map(obj => (
+          {objects.length === 0 ? (
+             <div className="col-span-full flex flex-col items-centerjustify-center p-10 bg-white border border-dashed border-slate-300 rounded-lg text-center">
+                 <ShieldCheck className="w-12 h-12 text-slate-300 mb-2 mx-auto" />
+                 <p className="text-slate-500 font-medium">Belum ada Objek Pemeriksaan</p>
+                 <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Silakan Tambah Objek Pemeriksaan terlebih dahulu untuk konfigurasi nama objek pemeriksaan dan komposisi tim pemeriksa</p>
+                 <Button variant="gold" className="mt-4" onClick={() => { setEditingObject(null); setShowObjectModal(true); }}>
+                    <Plus className="w-4 h-4" /> Tambah Objek Baru
+                 </Button>
+             </div>
+          ) : (
+          objects.map(obj => (
             <div key={obj.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-visible flex flex-col hover:shadow-md transition-shadow relative hover:z-[40] focus-within:z-[50]">
               <div className="bg-slate-800 px-3 py-2 border-b border-slate-700 flex justify-between items-center group rounded-t-lg">
                  <h3 className="font-bold text-white text-sm truncate max-w-[150px]" title={obj.name}>{obj.name}</h3>
@@ -1003,7 +1395,7 @@ export default function TeamManager() {
                     const examiner = getExaminerInSlot(obj.id, role.key, idx);
                     return (
                         <React.Fragment key={`${role.key}-${idx}`}>
-                           <div className="h-2 -my-1 w-full hover:bg-blue-400 hover:h-4 transition-all opacity-0 hover:opacity-50 rounded cursor-copy z-20" data-is-gap="true" onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.opacity = '1'; }} onDragLeave={(e) => { e.currentTarget.style.opacity = '0'; }} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}></div>
+                           <div className="h-2 -my-1 w-full z-20" data-is-gap="true" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}></div>
                            <div className="flex items-center gap-2 relative" onDragOver={e => e.preventDefault()} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}>
                             <div className={`w-10 shrink-0 text-[10px] py-1 text-center rounded font-bold uppercase ${role.color}`}>{role.short}</div>
                             <div className="flex-1 min-w-0 relative"> 
@@ -1025,7 +1417,8 @@ export default function TeamManager() {
                 })}
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
         {/* Floating Monitor */}
         <div className="fixed bottom-8 right-8 z-50">
