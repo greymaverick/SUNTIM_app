@@ -221,8 +221,17 @@ const FilterHeader = ({ label, fieldKey, uniqueOptions, activeFilters, onApplyFi
         setIsOpen(false);
       }
     };
-    if (isOpen) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    const handleEsc = (e) => {
+       if (e.key === 'Escape') setIsOpen(false);
+    };
+    if (isOpen) {
+       document.addEventListener("mousedown", handleClickOutside);
+       document.addEventListener("keydown", handleEsc);
+    }
+    return () => {
+       document.removeEventListener("mousedown", handleClickOutside);
+       document.removeEventListener("keydown", handleEsc);
+    };
   }, [isOpen]);
 
   const toggleValue = (val) => {
@@ -247,6 +256,17 @@ const FilterHeader = ({ label, fieldKey, uniqueOptions, activeFilters, onApplyFi
   );
 
   const isActive = activeFilters && activeFilters.length > 0;
+  const isAllSelected = filteredOptions.length > 0 && filteredOptions.every(opt => pendingFilters.includes(opt));
+  const isIndeterminate = filteredOptions.some(opt => pendingFilters.includes(opt)) && !isAllSelected;
+
+  const toggleAll = () => {
+    if (isAllSelected) {
+      setPendingFilters(prev => prev.filter(p => !filteredOptions.includes(p)));
+    } else {
+      const toAdd = filteredOptions.filter(opt => !pendingFilters.includes(opt));
+      setPendingFilters(prev => [...prev, ...toAdd]);
+    }
+  };
 
   return (
     <th className="px-4 py-3 align-top relative z-10">
@@ -281,6 +301,18 @@ const FilterHeader = ({ label, fieldKey, uniqueOptions, activeFilters, onApplyFi
           </div>
 
           <div className="max-h-48 overflow-y-auto border border-slate-100 rounded mb-3 custom-scrollbar">
+            {filteredOptions.length > 0 && (
+                <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer border-b border-slate-100 mb-1 sticky top-0 bg-white z-10">
+                  <input 
+                    type="checkbox" 
+                    checked={isAllSelected}
+                    ref={el => el && (el.indeterminate = isIndeterminate)}
+                    onChange={toggleAll}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-amber-500 focus:ring-amber-500 accent-amber-500"
+                  />
+                  <span className="text-xs font-bold text-slate-700">Pilih Semua</span>
+                </label>
+            )}
             {filteredOptions.length === 0 ? (
                <div className="p-2 text-xs text-slate-400 text-center italic">Tidak ada data</div>
             ) : (
@@ -299,8 +331,8 @@ const FilterHeader = ({ label, fieldKey, uniqueOptions, activeFilters, onApplyFi
           </div>
           
           <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-             <button onClick={() => setIsOpen(false)} className="text-xs px-3 py-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded">Batal</button>
              <button onClick={handleApply} className="text-xs px-3 py-1.5 bg-amber-500 text-white hover:bg-amber-600 rounded font-medium shadow-sm">Terapkan</button>
+             <button onClick={() => setIsOpen(false)} className="text-xs px-3 py-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded">Batal</button>
           </div>
           
           {pendingFilters.length > 0 && (
@@ -317,10 +349,19 @@ const FilterHeader = ({ label, fieldKey, uniqueOptions, activeFilters, onApplyFi
 // --- Modals ---
 
 const Modal = ({ isOpen, onClose, title, children }) => {
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (isOpen && e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0">
           <h3 className="font-bold text-slate-800">{title}</h3>
           <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full text-slate-500"><X className="w-5 h-5"/></button>
@@ -332,10 +373,18 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 };
 
 const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmLabel = "Hapus", isAlert = false }) => {
+  useEffect(() => {
+    const handleEsc = (e) => {
+        if (isOpen && e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 scale-100">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 scale-100" onClick={e => e.stopPropagation()}>
         <div className="flex items-start gap-4">
           <div className={`p-3 rounded-full shrink-0 ${isAlert ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
             {isAlert ? <Info className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
@@ -346,6 +395,12 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmLabel
           </div>
         </div>
         <div className="mt-6 flex justify-end gap-3">
+          <button 
+            onClick={() => { onConfirm(); onClose(); }} 
+            className={`px-4 py-2 rounded-lg text-white font-medium text-sm shadow-sm transition-colors ${isAlert ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}
+          >
+            {isAlert ? 'OK' : confirmLabel}
+          </button>
           {!isAlert && (
             <button 
               onClick={onClose} 
@@ -354,12 +409,6 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmLabel
               Batal
             </button>
           )}
-          <button 
-            onClick={() => { onConfirm(); onClose(); }} 
-            className={`px-4 py-2 rounded-lg text-white font-medium text-sm shadow-sm transition-colors ${isAlert ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}
-          >
-            {isAlert ? 'OK' : confirmLabel}
-          </button>
         </div>
       </div>
     </div>
@@ -368,10 +417,19 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmLabel
 
 const StatusSelectionModal = ({ isOpen, onClose, onConfirm }) => {
   const [selectedStatus, setSelectedStatus] = useState('draft');
+  
+  useEffect(() => {
+    const handleEsc = (e) => {
+        if (isOpen && e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
          <h3 className="text-lg font-bold text-slate-900 mb-4">Pilih Status Proyek</h3>
          <div className="space-y-2 mb-6">
            {PROJECT_STATUSES.map(status => (
@@ -384,8 +442,8 @@ const StatusSelectionModal = ({ isOpen, onClose, onConfirm }) => {
            ))}
          </div>
          <div className="flex justify-end gap-3">
-           <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm">Batal</button>
            <button onClick={() => onConfirm(selectedStatus)} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium text-sm shadow-sm">Simpan Proyek</button>
+           <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm">Batal</button>
          </div>
       </div>
     </div>
@@ -393,10 +451,18 @@ const StatusSelectionModal = ({ isOpen, onClose, onConfirm }) => {
 };
 
 const DrillDownModal = ({ isOpen, onClose, title, data }) => {
+  useEffect(() => {
+    const handleEsc = (e) => {
+        if (isOpen && e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <h3 className="font-bold text-slate-800 text-sm">{title}</h3>
           <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full text-slate-500"><X className="w-4 h-4"/></button>
@@ -472,7 +538,7 @@ export default function TeamManager() {
   // Table State
   const [objSort, setObjSort] = useState({ key: null, dir: 'asc' });
   const [examSort, setExamSort] = useState({ key: null, dir: 'asc' });
-  const [examFilter, setExamFilter] = useState({ name: [], nip_bpk: [], nip_18: [], jabatan: [], edu: [] }); 
+  const [examFilter, setExamFilter] = useState({ name: [], nip_bpk: [], nip_18: [], jabatan: [], edu: [], status: [] }); 
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, examinerId: null, sourceObjId: null, sourceKey: null });
@@ -546,7 +612,7 @@ export default function TeamManager() {
 
   const handleDownloadTemplate = () => {
     const headers = ["NIP BPK", "NIP 18", "NAMA", "JABATAN", "LATAR PENDIDIKAN"];
-    const rows = [["24000xxxx", "19xx100120xx051001", "YPS", "Pemeriksa Ahli Muda", "Akuntansi"], ["24000yyyy", "19xx020220xx032002", "Contoh Wanita", "Pemeriksa Pertama", "Hukum"]];
+    const rows = [["240008318", "198910012011051001", "IGWP", "Pemeriksa Ahli Muda", "Akuntansi"], ["240008318", "19xx020220xx032002", "Contoh Wanita", "Pemeriksa Pertama", "Hukum"]];
     const csvContent = "sep=;\n" + headers.join(";") + "\n" + rows.map(e => e.join(";")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1254,12 +1320,25 @@ export default function TeamManager() {
   const renderExaminersView = () => {
     // ... Sort Logic ...
     const handleSort = (key) => setExamSort(prev => ({ key, dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc' }));
-    const uniqueNames = [...new Set(examiners.map(e => e.name))].sort();
-    // ... other unique options ... 
-    const uniqueNipBpk = [...new Set(examiners.map(e => e.nip_bpk))].sort();
-    const uniqueNip18 = [...new Set(examiners.map(e => e.nip_18))].sort();
-    const uniqueJabatan = [...new Set(examiners.map(e => e.jabatan))].sort();
-    const uniqueEdu = [...new Set(examiners.map(e => e.edu))].sort();
+
+    // Cascading Filter Logic
+    const getFilteredDataForColumn = (excludeKey) => {
+        let data = [...examiners];
+        if (excludeKey !== 'name' && examFilter.name.length > 0) data = data.filter(e => examFilter.name.includes(e.name));
+        if (excludeKey !== 'nip_bpk' && examFilter.nip_bpk.length > 0) data = data.filter(e => examFilter.nip_bpk.includes(e.nip_bpk));
+        if (excludeKey !== 'nip_18' && examFilter.nip_18.length > 0) data = data.filter(e => examFilter.nip_18.includes(e.nip_18));
+        if (excludeKey !== 'jabatan' && examFilter.jabatan.length > 0) data = data.filter(e => examFilter.jabatan.includes(e.jabatan));
+        if (excludeKey !== 'edu' && examFilter.edu.length > 0) data = data.filter(e => examFilter.edu.includes(e.edu));
+        if (excludeKey !== 'status' && examFilter.status && examFilter.status.length > 0) data = data.filter(e => examFilter.status.includes(e.status ? 'Aktif' : 'Non-Aktif'));
+        return data;
+    };
+
+    const uniqueNames = [...new Set(getFilteredDataForColumn('name').map(e => e.name))].sort();
+    const uniqueNipBpk = [...new Set(getFilteredDataForColumn('nip_bpk').map(e => e.nip_bpk))].sort();
+    const uniqueNip18 = [...new Set(getFilteredDataForColumn('nip_18').map(e => e.nip_18))].sort();
+    const uniqueJabatan = [...new Set(getFilteredDataForColumn('jabatan').map(e => e.jabatan))].sort();
+    const uniqueEdu = [...new Set(getFilteredDataForColumn('edu').map(e => e.edu))].sort();
+    const uniqueStatus = ['Aktif', 'Non-Aktif'];
 
     let processedData = [...examiners];
     // ... filters ...
@@ -1268,11 +1347,18 @@ export default function TeamManager() {
     if (examFilter.nip_18.length > 0) processedData = processedData.filter(e => examFilter.nip_18.includes(e.nip_18));
     if (examFilter.jabatan.length > 0) processedData = processedData.filter(e => examFilter.jabatan.includes(e.jabatan));
     if (examFilter.edu.length > 0) processedData = processedData.filter(e => examFilter.edu.includes(e.edu));
+    if (examFilter.status && examFilter.status.length > 0) processedData = processedData.filter(e => examFilter.status.includes(e.status ? 'Aktif' : 'Non-Aktif'));
 
     if (examSort.key) {
       processedData.sort((a, b) => {
-        const valA = (a[examSort.key] || '').toString().toLowerCase();
-        const valB = (b[examSort.key] || '').toString().toLowerCase();
+        let valA = a[examSort.key];
+        let valB = b[examSort.key];
+        if(examSort.key === 'status') {
+             valA = a.status ? 'Aktif' : 'Non-Aktif';
+             valB = b.status ? 'Aktif' : 'Non-Aktif';
+        }
+        valA = (valA || '').toString().toLowerCase();
+        valB = (valB || '').toString().toLowerCase();
         return examSort.dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
       });
     }
@@ -1304,7 +1390,7 @@ export default function TeamManager() {
                 <FilterHeader label="Nama" fieldKey="name" uniqueOptions={uniqueNames} activeFilters={examFilter.name} onApplyFilter={(v)=>setExamFilter({...examFilter, name:v})} onSort={() => handleSort('name')} sortState={examSort} />
                 <FilterHeader label="Jabatan" fieldKey="jabatan" uniqueOptions={uniqueJabatan} activeFilters={examFilter.jabatan} onApplyFilter={(v) => setExamFilter({...examFilter, jabatan: v})} onSort={() => handleSort('jabatan')} sortState={examSort} />
                 <FilterHeader label="Pendidikan" fieldKey="edu" uniqueOptions={uniqueEdu} activeFilters={examFilter.edu} onApplyFilter={(v) => setExamFilter({...examFilter, edu: v})} onSort={() => handleSort('edu')} sortState={examSort} />
-                <th className="px-4 py-3 text-center">Status</th>
+                <FilterHeader label="Status" fieldKey="status" uniqueOptions={uniqueStatus} activeFilters={examFilter.status} onApplyFilter={(v) => setExamFilter({...examFilter, status: v})} onSort={() => handleSort('status')} sortState={examSort} />
                 <th className="px-4 py-3 w-24 text-center">Aksi</th>
               </tr>
             </thead>
@@ -1642,9 +1728,9 @@ export default function TeamManager() {
         {/* Export Selection Modal Removed, using inline dropdown */}
         <DrillDownModal isOpen={drillDown.isOpen} title={drillDown.title} data={drillDown.data} onClose={() => setDrillDown({ ...drillDown, isOpen: false })} />
         <ConfirmModal isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message} onConfirm={confirmState.onConfirm} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} confirmLabel={confirmState.confirmLabel} isAlert={confirmState.isAlert} />
-        <Modal isOpen={showObjectModal} onClose={() => setShowObjectModal(false)} title={editingObject ? 'Edit Objek' : 'Tambah Obrik'}><form onSubmit={saveObject} className="space-y-4"><Input name="name" label="Nama Objek Pemeriksaan" defaultValue={editingObject?.name} placeholder="Contoh: LKPD Kab. Badung" required /><div className="border-t pt-4 border-slate-100"><label className="block text-xs font-bold text-slate-700 mb-2">Konfigurasi Slot Tim</label><div className="grid grid-cols-2 gap-3">{ROLES.map(r => (<div key={r.key} className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-200"><span className="text-xs font-medium text-slate-600 w-1/2">{r.label} ({r.short})</span><input type="number" name={`slot_${r.key}`} min="0" className="w-16 text-center text-sm border rounded p-1" defaultValue={editingObject ? (editingObject.slots[r.key] || 0) : (r.key === 'PJ' || r.key === 'KT' ? 1 : 0)} /></div>))}</div></div><div className="flex justify-end gap-2 mt-6"><Button type="button" variant="ghost" onClick={() => setShowObjectModal(false)}>Batal</Button><Button type="submit" variant="gold">Simpan</Button></div></form></Modal>
-        <Modal isOpen={showExaminerModal} onClose={() => setShowExaminerModal(false)} title={editingExaminer ? 'Edit Pemeriksa' : 'Tambah Pemeriksa'}><form onSubmit={saveExaminer} className="space-y-4"><Input name="nip_bpk" label="NIP BPK" defaultValue={editingExaminer?.nip_bpk} required /><Input name="nip_18" label="NIP 18 Digit" defaultValue={editingExaminer?.nip_18} required /><Input name="name" label="Nama Lengkap" defaultValue={editingExaminer?.name} required /><Input name="jabatan" label="Jabatan" defaultValue={editingExaminer?.jabatan} required /><Input name="edu" label="Latar Pendidikan" defaultValue={editingExaminer?.edu} required /><div className="flex justify-end gap-2 mt-6"><Button type="button" variant="ghost" onClick={() => setShowExaminerModal(false)}>Batal</Button><Button type="submit" variant="gold">Simpan</Button></div></form></Modal>
-        <Modal isOpen={statusReasonModal.open} onClose={() => setStatusReasonModal({open: false})} title="Alasan Non-Aktif"><p className="text-sm text-slate-500 mb-2">Mengapa pemeriksa ini tidak bisa mengikuti pemeriksaan?</p><textarea className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:border-amber-500 focus:outline-none" rows="3" placeholder="Contoh: Cuti Melahirkan, Diklat..." value={tempReason} onChange={e => setTempReason(e.target.value)}></textarea><div className="flex justify-end gap-2 mt-4"><Button onClick={() => setStatusReasonModal({open: false})}>Batal</Button><Button variant="danger" onClick={confirmStatusReason}>Non-Aktifkan</Button></div></Modal>
+        <Modal isOpen={showObjectModal} onClose={() => setShowObjectModal(false)} title={editingObject ? 'Edit Objek' : 'Tambah Obrik'}><form onSubmit={saveObject} className="space-y-4"><Input name="name" label="Nama Objek Pemeriksaan" defaultValue={editingObject?.name} placeholder="Contoh: LKPD Kab. Badung" required /><div className="border-t pt-4 border-slate-100"><label className="block text-xs font-bold text-slate-700 mb-2">Konfigurasi Slot Tim</label><div className="grid grid-cols-2 gap-3">{ROLES.map(r => (<div key={r.key} className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-200"><span className="text-xs font-medium text-slate-600 w-1/2">{r.label} ({r.short})</span><input type="number" name={`slot_${r.key}`} min="0" className="w-16 text-center text-sm border rounded p-1" defaultValue={editingObject ? (editingObject.slots[r.key] || 0) : (r.key === 'PJ' || r.key === 'KT' ? 1 : 0)} /></div>))}</div></div><div className="flex justify-end gap-2 mt-6"><Button type="submit" variant="gold">Simpan</Button><Button type="button" variant="ghost" onClick={() => setShowObjectModal(false)}>Batal</Button></div></form></Modal>
+        <Modal isOpen={showExaminerModal} onClose={() => setShowExaminerModal(false)} title={editingExaminer ? 'Edit Pemeriksa' : 'Tambah Pemeriksa'}><form onSubmit={saveExaminer} className="space-y-4"><Input name="nip_bpk" label="NIP BPK" defaultValue={editingExaminer?.nip_bpk} required /><Input name="nip_18" label="NIP 18 Digit" defaultValue={editingExaminer?.nip_18} required /><Input name="name" label="Nama Lengkap" defaultValue={editingExaminer?.name} required /><Input name="jabatan" label="Jabatan" defaultValue={editingExaminer?.jabatan} required /><Input name="edu" label="Latar Pendidikan" defaultValue={editingExaminer?.edu} required /><div className="flex justify-end gap-2 mt-6"><Button type="submit" variant="gold">Simpan</Button><Button type="button" variant="ghost" onClick={() => setShowExaminerModal(false)}>Batal</Button></div></form></Modal>
+        <Modal isOpen={statusReasonModal.open} onClose={() => setStatusReasonModal({open: false})} title="Alasan Non-Aktif"><p className="text-sm text-slate-500 mb-2">Mengapa pemeriksa ini tidak bisa mengikuti pemeriksaan?</p><textarea className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:border-amber-500 focus:outline-none" rows="3" placeholder="Contoh: Cuti Melahirkan, Diklat..." value={tempReason} onChange={e => setTempReason(e.target.value)}></textarea><div className="flex justify-end gap-2 mt-4"><Button variant="danger" onClick={confirmStatusReason}>Non-Aktifkan</Button><Button onClick={() => setStatusReasonModal({open: false})}>Batal</Button></div></Modal>
         {contextMenu.visible && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setContextMenu({ ...contextMenu, visible: false })} />
