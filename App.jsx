@@ -1000,6 +1000,40 @@ export default function TeamManager() {
         
         drawFooter(doc);
 
+        // 5. OFF DUTY SECTION
+        const offDutyExaminers = examiners.filter(e => !e.status);
+        if (offDutyExaminers.length > 0) {
+             doc.addPage();
+             
+             doc.setFontSize(14);
+             doc.setFont("helvetica", "bold");
+             doc.setTextColor(220, 38, 38); // Red
+             doc.text("Pemeriksa Off Duty", 14, 20);
+             doc.setTextColor(0, 0, 0); // Reset
+
+             const offRows = offDutyExaminers.map((ex, idx) => [
+                 idx + 1,
+                 ex.name,
+                 ex.jabatan,
+                 ex.edu,
+                 ex.reason || '-'
+             ]);
+
+             autoTable(doc, {
+                startY: 25,
+                head: [['No', 'Nama', 'Jabatan', 'Latar Pendidikan', 'Alasan Off']],
+                body: offRows,
+                theme: 'grid',
+                headStyles: { fillColor: [254, 226, 226], textColor: [185, 28, 28], fontStyle: 'bold' },
+                styles: { fontSize: 10, cellPadding: 2 },
+                columnStyles: { 0: { cellWidth: 10, halign: 'center' } }, 
+                margin: { bottom: 20 },
+                didDrawPage: (data) => {
+                    drawFooter(doc);
+                }
+             });
+        }
+
         // 3. Page Number Loop
         const totalPages = doc.internal.getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {
