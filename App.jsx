@@ -1198,7 +1198,7 @@ export default function TeamManager() {
                   <img src="SINER6I.png" alt="Sinergi" className="h-16 w-auto object-contain" onError={(e) => e.target.style.display='none'} />
               </div>
               <div className="mb-1">Aplikasi {APP_NAME} v1.0</div>
-              <div>&copy; {YEAR} <a href="http://bpk.id/dacbpkbali" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500 hover:underline transition-colors">{DEVELOPER_NAME}</a></div>
+              <div>&copy; {YEAR} <a href="#" onClick={(e)=>e.preventDefault()} className="font-bold text-amber-500 hover:text-amber-400 transition-colors cursor-pointer">{DEVELOPER_NAME}</a></div>
           </div>
       )}
     </div>
@@ -1401,6 +1401,14 @@ export default function TeamManager() {
            <div className="text-sm text-slate-600">Status Konsep Susunan Tim: <span className={`font-bold px-2 py-0.5 rounded ${currentStatus?.color || 'bg-slate-100 text-slate-500'}`}>{currentStatus?.label || '--------'}</span><span className="ml-2 text-xs text-slate-400">- {lastSaved ? formatDate(lastSaved) : '--------'}</span></div>
         </div>
 
+        <div className="mb-4 flex gap-2 items-start text-xs text-slate-500 bg-blue-50/50 p-2 rounded-lg border border-blue-100">
+           <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+           <div>
+               <p>Drag and drop nama pemeriksa untuk mengurutkan/menukar/memindahkan pemeriksa atau klik pada nama untuk opsi perpindahan.</p>
+               <p className="mt-0.5">Gunakan jaringan intranet BPK untuk menampilkan foto pemeriksa.</p>
+           </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
           {objects.length === 0 ? (
              <div className="col-span-full flex flex-col items-centerjustify-center p-10 bg-white border border-dashed border-slate-300 rounded-lg text-center">
@@ -1436,8 +1444,8 @@ export default function TeamManager() {
                               {examiner ? (
                                 <div draggable onDragStart={() => { dragItem.current = { examiner, sourceObjId: obj.id, sourceRole: role.key, sourceIndex: idx }; }} className="group bg-white border border-slate-200 rounded p-1 shadow-sm hover:border-amber-400 flex items-center gap-2 cursor-grab active:cursor-grabbing">
                                   <GripVertical className="w-3 h-3 text-slate-300" />
-                                  <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0 overflow-hidden">
-                                      <img src={examiner.photo || "icon.jpg"} alt={getInitials(examiner.name)} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.parentNode.innerText = getInitials(examiner.name); }} />
+                                  <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0 overflow-hidden">
+                                      <img src={examiner.photo || (examiner.nip_bpk ? `https://sisdm.bpk.go.id/photo/${examiner.nip_bpk}/md.jpg` : "icon.jpg")} alt={getInitials(examiner.name)} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.parentNode.innerText = getInitials(examiner.name); }} />
                                   </div>
                                   <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleContextMenu(e, examiner.id, obj.id, `${role.key}_${idx}`); }}><div className="text-xs font-semibold text-slate-800 truncate">{examiner.name}</div></div>
                                   <button onClick={() => removeAssignment(obj.id, role.key, idx)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500"><X className="w-3 h-3" /></button>
@@ -1639,7 +1647,22 @@ export default function TeamManager() {
         {contextMenu.visible && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setContextMenu({ ...contextMenu, visible: false })} />
-            <div className="fixed z-50 bg-white rounded-lg shadow-xl border border-slate-200 w-64 overflow-hidden animate-in fade-in zoom-in-95 duration-100" style={{ top: Math.min(contextMenu.y, window.innerHeight - 300), left: Math.min(contextMenu.x, window.innerWidth - 300) }}>
+            <div className="fixed z-50 bg-white rounded-lg shadow-xl border border-slate-200 w-64 overflow-hidden animate-in fade-in zoom-in-95 duration-100" style={{ top: Math.min(contextMenu.y, window.innerHeight - 450), left: Math.min(contextMenu.x, window.innerWidth - 300) }}>
+              {(() => {
+                const ctxEx = examiners.find(e => e.id === contextMenu.examinerId);
+                if (!ctxEx) return null;
+                return (
+                  <div className="relative w-full h-40 bg-slate-100 flex flex-col items-center justify-center border-b border-slate-200">
+                      <div className="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden mb-2">
+                          <img src={ctxEx.photo || (ctxEx.nip_bpk ? `https://sisdm.bpk.go.id/photo/${ctxEx.nip_bpk}/md.jpg` : "icon.jpg")} alt={ctxEx.name} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.style.display='none'; e.target.parentNode.innerText = getInitials(ctxEx.name); e.target.parentNode.className += " flex items-center justify-center bg-slate-200 text-slate-500 font-bold text-2xl"; }} />
+                      </div>
+                      <div className="px-2 w-full text-center">
+                        <div className="text-sm font-bold text-slate-800 truncate">{ctxEx.name}</div>
+                        <div className="text-xs text-slate-500 truncate">{ctxEx.jabatan}</div>
+                      </div>
+                  </div>
+                );
+              })()}
               <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 text-xs font-bold text-slate-500">Opsi Perpindahan</div>
               {moveSubMenu === null && (<div className="p-1"><button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('move_target_list'); }}><span>Pindahkan ke...</span><ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button><button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('swap_target_list'); }}><span>Tukar dengan...</span><ArrowRightLeft className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button><div className="border-t border-slate-100 my-1"></div><button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded flex gap-2 items-center" onClick={() => { removeAssignment(contextMenu.sourceObjId, contextMenu.sourceKey.split('_')[0], contextMenu.sourceKey.split('_')[1]); setContextMenu({...contextMenu, visible:false}); }}><LogOut className="w-4 h-4"/> Lepas dari Tim</button></div>)}
               {moveSubMenu === 'move_target_list' && (<div className="p-1 max-h-60 overflow-y-auto"><button className="w-full text-left px-2 py-1 text-xs text-slate-400 mb-1 flex items-center" onClick={(e) => { e.stopPropagation(); setMoveSubMenu(null); }}><ChevronDown className="w-3 h-3 rotate-90 mr-1"/> Kembali</button>{objects.filter(o => o.id !== contextMenu.sourceObjId).map(obj => (<button key={obj.id} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-green-50 rounded border-b border-slate-50 last:border-0" onClick={() => selectTargetObjectForMove(obj.id)}><div className="font-semibold">{obj.name}</div></button>))}{objects.length <= 1 && <div className="p-3 text-center text-xs text-slate-400">Tidak ada tim lain tersedia.</div>}</div>)}
