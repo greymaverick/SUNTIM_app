@@ -1127,7 +1127,21 @@ export default function TeamManager() {
   };
 
   const moveExaminerRow = (from, to) => { const updated = [...examiners]; const [moved] = updated.splice(from, 1); updated.splice(to, 0, moved); setExaminers(updated); };
-  const autoSortExaminers = () => { showConfirm("Urutkan Nama?", "Urutkan berdasarkan Jabatan > Angkatan > Usia.", () => { setExaminers(prev => [...prev].sort((a, b) => { const rankA = JOB_RANK[a.jabatan]||99; const rankB = JOB_RANK[b.jabatan]||99; if(rankA!==rankB) return rankA-rankB; const angA = a.nip_18?.length>=12?parseInt(a.nip_18.substring(8,12)):9999; const angB = b.nip_18?.length>=12?parseInt(b.nip_18.substring(8,12)):9999; if(angA!==angB) return angA-angB; return (a.nip_18?.length>=8?parseInt(a.nip_18.substring(0,8)):99999999)-(b.nip_18?.length>=8?parseInt(b.nip_18.substring(0,8)):99999999); })); showAlert("Sukses", "Daftar diurutkan."); }, "Urutkan"); };
+  const autoSortExaminers = () => { 
+    showConfirm("Urutkan Nama?", "Urutkan berdasarkan Jabatan > Angkatan > Usia.", () => { 
+        setExaminers(prev => [...prev].sort((a, b) => { 
+            const rankA = JOB_RANK[a.jabatan]||99; 
+            const rankB = JOB_RANK[b.jabatan]||99; 
+            if(rankA!==rankB) return rankA-rankB; 
+            const angA = a.nip_18?.length>=12?parseInt(a.nip_18.substring(8,12)):9999; 
+            const angB = b.nip_18?.length>=12?parseInt(b.nip_18.substring(8,12)):9999; 
+            if(angA!==angB) return angA-angB; 
+            return (a.nip_18?.length>=8?parseInt(a.nip_18.substring(0,8)):99999999)-(b.nip_18?.length>=8?parseInt(b.nip_18.substring(0,8)):99999999); 
+        })); 
+        setExamSort({ key: null, dir: 'asc' });
+        showAlert("Sukses", "Daftar diurutkan."); 
+    }, "Urutkan"); 
+  };
   const autoSortTeams = () => { showConfirm("Urutkan Tim?", "Personil diurutkan sesuai database.", () => { setAssignments(prev => { const next={...prev}; Object.keys(next).forEach(objId=>{ const groups={}; Object.keys(next[objId]).forEach(k=>{ const r=k.split('_')[0]; if(!groups[r])groups[r]=[]; groups[r].push(next[objId][k]); }); Object.keys(groups).forEach(r=>{ groups[r].sort((a,b)=>examiners.findIndex(e=>e.id===a)-examiners.findIndex(e=>e.id===b)); groups[r].forEach((id,i)=>next[objId][`${r}_${i}`]=id); }); }); return next; }); showAlert("Sukses", "Tim diurutkan."); }, "Urutkan"); };
 
   // CRUD
