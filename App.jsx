@@ -621,14 +621,14 @@ export default function TeamManager() {
         // Single table header
         tableHTML += `<table border="1"><thead><tr style="background-color:#eee;"><th>OBRIK</th><th>NO</th><th>NAMA</th><th>PERAN</th><th>JABATAN</th><th>LATAR PENDIDIKAN</th></tr></thead><tbody>`;
 
-        let globalNo = 1;
         objects.forEach(obj => {
+            let no = 1;
             ROLES.forEach(role => {
                 const count = obj.slots[role.key];
                 for(let i=0; i<count; i++) {
                     const ex = getExaminerInSlot(obj.id, role.key, i);
                     if(ex) {
-                        tableHTML += `<tr><td>${obj.name}</td><td>${globalNo++}</td><td>${ex.name}</td><td>${role.label}</td><td>${ex.jabatan}</td><td>${ex.edu}</td></tr>`;
+                        tableHTML += `<tr><td>${obj.name}</td><td>${no++}</td><td>${ex.name}</td><td>${role.label}</td><td>${ex.jabatan}</td><td>${ex.edu}</td></tr>`;
                     }
                 }
             });
@@ -639,7 +639,7 @@ export default function TeamManager() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `SUNTIM_${statusLabel}_${timestamp}.xls`;
+        link.download = `SUNTIM_${projectTitle}_${timestamp}_${statusLabel}.xls`;
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
     } 
     else if (type === 'pdf') {
