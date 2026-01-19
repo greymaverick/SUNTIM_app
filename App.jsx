@@ -481,10 +481,10 @@ export default function TeamManager() {
 
   // --- Persistence ---
   useEffect(() => {
-    const savedObj = localStorage.getItem('bpk_suntim_objects_v17');
-    const savedExam = localStorage.getItem('bpk_suntim_examiners_v17');
-    const savedAssign = localStorage.getItem('bpk_suntim_assignments_v17');
-    const savedMeta = localStorage.getItem('bpk_suntim_meta_v17');
+    const savedObj = localStorage.getItem('bpk_suntim_objects_v18');
+    const savedExam = localStorage.getItem('bpk_suntim_examiners_v18');
+    const savedAssign = localStorage.getItem('bpk_suntim_assignments_v18');
+    const savedMeta = localStorage.getItem('bpk_suntim_meta_v18');
     
     if (savedObj) setObjects(JSON.parse(savedObj));
     if (savedExam) setExaminers(JSON.parse(savedExam));
@@ -498,10 +498,10 @@ export default function TeamManager() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('bpk_suntim_objects_v17', JSON.stringify(objects));
-    localStorage.setItem('bpk_suntim_examiners_v17', JSON.stringify(examiners));
-    localStorage.setItem('bpk_suntim_assignments_v17', JSON.stringify(assignments));
-    localStorage.setItem('bpk_suntim_meta_v17', JSON.stringify({ title: projectTitle, status: projectStatus, lastSaved }));
+    localStorage.setItem('bpk_suntim_objects_v18', JSON.stringify(objects));
+    localStorage.setItem('bpk_suntim_examiners_v18', JSON.stringify(examiners));
+    localStorage.setItem('bpk_suntim_assignments_v18', JSON.stringify(assignments));
+    localStorage.setItem('bpk_suntim_meta_v18', JSON.stringify({ title: projectTitle, status: projectStatus, lastSaved }));
   }, [objects, examiners, assignments, projectTitle, projectStatus, lastSaved]);
 
   // Handle PDF Print Event
@@ -1198,7 +1198,7 @@ export default function TeamManager() {
                   <img src="SINER6I.png" alt="Sinergi" className="h-16 w-auto object-contain" onError={(e) => e.target.style.display='none'} />
               </div>
               <div className="mb-1">Aplikasi {APP_NAME} v1.0</div>
-              <div>&copy; {YEAR} <a href="#" onClick={(e)=>e.preventDefault()} className="font-bold text-amber-500 hover:text-amber-400 transition-colors cursor-pointer">{DEVELOPER_NAME}</a></div>
+              <div>&copy; {YEAR} <a href="https://bpkgoid.sharepoint.com/sites/DACBPKBALI/SitePages/HOME.aspx" target="_blank" rel="noopener noreferrer" className="font-bold text-amber-500 hover:text-amber-400 transition-colors">{DEVELOPER_NAME}</a></div>
           </div>
       )}
     </div>
