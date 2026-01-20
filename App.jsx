@@ -10,7 +10,7 @@ import {
 
 // --- Constants ---
 
-const APP_NAME = "SUNTIM";
+const APP_NAME = "SUNTIM APP";
 const APP_SUBTITLE = "Tools Penyusunan dan Analitik Susunan Tim Pemeriksa";
 const DEVELOPER_NAME = "Tim DAC BPK Bali"; 
 const YEAR = "2026";
@@ -545,6 +545,8 @@ export default function TeamManager() {
   const [moveSubMenu, setMoveSubMenu] = useState(null); 
   const [selectedTargetObjId, setSelectedTargetObjId] = useState(null);
 
+  const [isReadOnly, setIsReadOnly] = useState(false); // New State for Viewer Mode
+
   // --- Persistence ---
   useEffect(() => {
     const savedObj = localStorage.getItem('bpk_suntim_objects_v18');
@@ -644,7 +646,7 @@ export default function TeamManager() {
   const performBackup = (statusId) => {
     const timestamp = new Date().toISOString();
     setProjectStatus(statusId); setLastSaved(timestamp);
-    const data = { objects, examiners, assignments, projectTitle, version: '1.0', timestamp, status: statusId };
+    const data = { objects, examiners, assignments, projectTitle, version: '1.0', timestamp, status: statusId, readOnly: isReadOnly };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url;
     const now = new Date();
@@ -667,6 +669,7 @@ export default function TeamManager() {
           if(json.status) setProjectStatus(json.status); 
           if(json.timestamp) setLastSaved(json.timestamp);
           if(json.projectTitle) setProjectTitle(json.projectTitle);
+          if(json.readOnly) setIsReadOnly(true); // Auto-lock if file is marked read-only
           showAlert("Sukses", "Proyek dimuat."); 
         }, "Timpa"); } else showAlert("Error", "File invalid."); } catch (err) { showAlert("Error", "Gagal baca file."); }
     };
@@ -748,7 +751,7 @@ export default function TeamManager() {
             doc.text(timeText, 14, pageHeight - 10);
             
             // Center Footer
-            doc.text("dicetak dari Aplikasi SUNTIM © DAC BPK Bali", pageWidth / 2, pageHeight - 10, { align: 'center' });
+            doc.text("dicetak dari SUNTIM APP © DAC BPK Bali", pageWidth / 2, pageHeight - 10, { align: 'center' });
         };
 
         const drawHeader = (doc) => {
@@ -1256,6 +1259,9 @@ export default function TeamManager() {
       <div className="flex-1 overflow-y-auto py-4 space-y-2">
          <div className="px-2">
           {sidebarOpen && <div className="text-xs font-bold text-slate-500 uppercase px-2 mb-2">KONFIGURASI DATA</div>}
+          <button onClick={() => setIsReadOnly(!isReadOnly)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors border ${isReadOnly ? 'bg-red-50 border-red-200 text-red-700' : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-400'}`}>
+            {isReadOnly ? <><ShieldCheck className="w-5 h-5 shrink-0" />{sidebarOpen && <span>Mode Viewer (Aktif)</span>}</> : <><Edit3 className="w-5 h-5 shrink-0" />{sidebarOpen && <span>Mode Editor</span>}</>}
+          </button>
           <button onClick={() => setActiveMenu('examiners')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${activeMenu === 'examiners' ? 'bg-amber-500 text-white' : 'hover:bg-slate-800'} mt-1`}>
             <Users className="w-5 h-5 shrink-0" />{sidebarOpen && <span>Pemeriksa</span>}
           </button>
@@ -1324,7 +1330,7 @@ export default function TeamManager() {
             </div>
             <div className="mt-8 pt-4 border-t border-black flex justify-between text-xs font-mono text-gray-600 fixed bottom-0 w-full pr-16 bg-white">
                 <div className="w-1/3">Status Konsep Susunan Tim: <br/><span className="font-bold">{currentStatus?.label}</span><br/>{dateStr} pukul {timeStr}</div>
-                <div className="w-1/3 text-center">dicetak dari Aplikasi SUNTIM<br/>&copy; {YEAR} {DEVELOPER_NAME}</div>
+                <div className="w-1/3 text-center">dicetak dari SUNTIM APP<br/>&copy; {YEAR} {DEVELOPER_NAME}</div>
                 <div className="w-1/3 text-right"></div>
             </div>
         </div>
@@ -1380,17 +1386,25 @@ export default function TeamManager() {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div><h2 className="text-2xl font-bold text-slate-800">Daftar Pemeriksa</h2></div>
+          <div><h2 className="text-2xl font-bold text-slate-800">Daftar Pemeriksa {isReadOnly && <span className="text-xs font-normal text-red-500 bg-red-50 px-2 py-1 rounded ml-2 border border-red-200">Read-Only View</span>}</h2></div>
           <div className="flex gap-2 items-center">
-            <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-            <div className="flex bg-white rounded-lg border border-slate-300 overflow-hidden shadow-sm">
-               <button onClick={handleImportClick} className="px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-r border-slate-300"><FileSpreadsheet className="w-4 h-4 text-green-600" /> Import Excel</button>
-               <button onClick={handleDownloadTemplate} className="px-2 py-2 text-sm bg-slate-50 text-slate-500 hover:text-slate-700 hover:bg-slate-100" title="Unduh Template"><FileDown className="w-4 h-4" /></button>
-            </div>
+            {!isReadOnly && (
+            <>
+                <input type="file" accept=".csv" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                <div className="flex bg-white rounded-lg border border-slate-300 overflow-hidden shadow-sm">
+                   <button onClick={handleImportClick} className="px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-r border-slate-300"><FileSpreadsheet className="w-4 h-4 text-green-600" /> Import Excel</button>
+                   <button onClick={handleDownloadTemplate} className="px-2 py-2 text-sm bg-slate-50 text-slate-500 hover:text-slate-700 hover:bg-slate-100" title="Unduh Template"><FileDown className="w-4 h-4" /></button>
+                </div>
+            </>
+            )}
             <Button variant="outline" onClick={autoSortExaminers} title="Urutkan SDM"><ArrowDownWideNarrow className="w-4 h-4 text-slate-600" /> Urutkan SDM</Button>
-            <div className="h-6 w-px bg-slate-300 mx-2"></div>
-            <Button variant="danger" onClick={deleteAllExaminers}><Trash2 className="w-4 h-4" /> Hapus Semua</Button>
-            <Button variant="gold" onClick={() => { setEditingExaminer(null); setShowExaminerModal(true); }}><Plus className="w-4 h-4" /> Tambah Pemeriksa</Button>
+            {!isReadOnly && (
+            <>
+                <div className="h-6 w-px bg-slate-300 mx-2"></div>
+                <Button variant="danger" onClick={deleteAllExaminers}><Trash2 className="w-4 h-4" /> Hapus Semua</Button>
+                <Button variant="gold" onClick={() => { setEditingExaminer(null); setShowExaminerModal(true); }}><Plus className="w-4 h-4" /> Tambah Pemeriksa</Button>
+            </>
+            )}
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible">
@@ -1405,30 +1419,37 @@ export default function TeamManager() {
                 <FilterHeader label="Jabatan" fieldKey="jabatan" uniqueOptions={uniqueJabatan} activeFilters={examFilter.jabatan} onApplyFilter={(v) => setExamFilter({...examFilter, jabatan: v})} onSort={() => handleSort('jabatan')} sortState={examSort} />
                 <FilterHeader label="Pendidikan" fieldKey="edu" uniqueOptions={uniqueEdu} activeFilters={examFilter.edu} onApplyFilter={(v) => setExamFilter({...examFilter, edu: v})} onSort={() => handleSort('edu')} sortState={examSort} />
                 <FilterHeader label="Status" fieldKey="status" uniqueOptions={uniqueStatus} activeFilters={examFilter.status} onApplyFilter={(v) => setExamFilter({...examFilter, status: v})} onSort={() => handleSort('status')} sortState={examSort} />
-                <th className="px-4 py-3 w-24 text-center">Aksi</th>
+                {!isReadOnly && <th className="px-4 py-3 w-24 text-center">Aksi</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {processedData.length === 0 ? (
                  <tr>
-                    <td colSpan="9" className="py-10 text-center">
+                    <td colSpan={isReadOnly ? 8 : 9} className="py-10 text-center">
                         <Users className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                         <p className="text-slate-500 font-medium">Belum ada Data Pemeriksa</p>
-                        <p className="text-xs text-slate-400 mt-1">Silakan tambah pemeriksa atau impor daftar pemeriksa</p>
+                        {!isReadOnly && <p className="text-xs text-slate-400 mt-1">Silakan tambah pemeriksa atau impor daftar pemeriksa</p>}
                     </td>
                  </tr>
               ) : (
               processedData.map((ex, idx) => (
-                <tr key={ex.id} className={`hover:bg-slate-50 ${!ex.status ? 'bg-slate-50/50' : ''}`} draggable onDragStart={() => { dragRow.current = idx; }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (dragRow.current !== null) { moveExaminerRow(dragRow.current, idx); dragRow.current = null; } }}>
-                  <td className="px-4 py-3 text-center cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500"><GripVertical className="w-4 h-4" /></td>
+                <tr key={ex.id} className={`hover:bg-slate-50 ${!ex.status ? 'bg-slate-50/50' : ''}`} draggable={!isReadOnly} onDragStart={() => { dragRow.current = idx; }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (!isReadOnly && dragRow.current !== null) { moveExaminerRow(dragRow.current, idx); dragRow.current = null; } }}>
+                  <td className={`px-4 py-3 text-center ${!isReadOnly ? 'cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500' : 'text-slate-200'}`}><GripVertical className="w-4 h-4" /></td>
                   <td className="px-4 py-3 text-center text-slate-500">{idx + 1}</td>
                   <td className="px-4 py-3 text-slate-600 font-mono text-xs">{ex.nip_bpk}</td>
                   <td className="px-4 py-3 text-slate-600 font-mono text-xs">{ex.nip_18}</td>
                   <td className="px-4 py-3 font-medium text-slate-800">{ex.name}{!ex.status && <div className="text-[10px] text-red-500 mt-0.5">Off: {ex.reason}</div>}</td>
                   <td className="px-4 py-3 text-slate-600">{ex.jabatan}</td>
                   <td className="px-4 py-3 text-slate-600">{ex.edu}</td>
-                  <td className="px-4 py-3 text-center"><button onClick={() => toggleStatus(ex.id)} className={`px-3 py-1 rounded-full text-xs font-semibold border ${ex.status ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>{ex.status ? 'ON' : 'OFF'}</button></td>
-                  <td className="px-4 py-3"><div className="flex justify-center gap-1"><button onClick={() => { setEditingExaminer(ex); setShowExaminerModal(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><User className="w-4 h-4"/></button><button onClick={() => deleteExaminer(ex.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4"/></button></div></td>
+                  <td className="px-4 py-3 text-center">
+                      <button 
+                        onClick={() => !isReadOnly && toggleStatus(ex.id)} 
+                        disabled={isReadOnly}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold border ${ex.status ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'} ${isReadOnly ? 'opacity-80 cursor-default' : ''}`}>
+                          {ex.status ? 'ON' : 'OFF'}
+                      </button>
+                  </td>
+                  {!isReadOnly && <td className="px-4 py-3"><div className="flex justify-center gap-1"><button onClick={() => { setEditingExaminer(ex); setShowExaminerModal(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><User className="w-4 h-4"/></button><button onClick={() => deleteExaminer(ex.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4"/></button></div></td>}
                 </tr>
               ))
               )}
@@ -1447,12 +1468,12 @@ export default function TeamManager() {
       <div className="space-y-6 pb-20 relative print:hidden">
         <div className="flex justify-between items-center sticky top-0 bg-slate-50 py-4 z-[60] border-b border-slate-200">
           <div>
-              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">Workspace Penyusunan Tim</h2>
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">Workspace Penyusunan Tim {isReadOnly && <span className="text-xs font-normal text-red-500 bg-red-50 px-2 py-1 rounded ml-2 border border-red-200">Read-Only View</span>}</h2>
           </div>
           <div className="flex gap-2 items-center">
             <input type="file" accept=".suntim" ref={backupInputRef} className="hidden" onChange={handleBackupFileChange} />
             <Button variant="outline" onClick={handleLoadProjectClick}><FolderOpen className="w-4 h-4 text-slate-600" /> Buka Proyek</Button>
-            <Button variant="outline" onClick={onBackupClick}><Save className="w-4 h-4 text-blue-600" /> Simpan Proyek</Button>
+            {!isReadOnly && <Button variant="outline" onClick={onBackupClick}><Save className="w-4 h-4 text-blue-600" /> Simpan Proyek</Button>}
             
             {/* Export Dropdown */}
             <div className="relative">
@@ -1471,14 +1492,14 @@ export default function TeamManager() {
             </div>
 
             <div className="h-6 w-px bg-slate-300 mx-2"></div>
-            <Button variant="outline" onClick={autoSortTeams}><ArrowDownAZ className="w-4 h-4 text-slate-600" /> Urutkan Tim</Button>
-            <Button variant="primary" onClick={() => { setEditingObject(null); setShowObjectModal(true); }}><Plus className="w-4 h-4" /> Tambah Obrik</Button>
+            <Button variant="outline" onClick={autoSortTeams} title="Urutkan Tim Berdasarkan SDM"><ArrowDownAZ className="w-4 h-4 text-slate-600" /> Urutkan Tim</Button>
+            {!isReadOnly && <Button variant="primary" onClick={() => { setEditingObject(null); setShowObjectModal(true); }}><Plus className="w-4 h-4" /> Tambah Obrik</Button>}
           </div>
         </div>
 
         {/* Project Title Editor */}
         <div className="flex items-center gap-2 -mt-4 mb-2 group">
-            {isEditingTitle ? (
+            {isEditingTitle && !isReadOnly ? (
                 <div className="flex items-center gap-2">
                     <input 
                         autoFocus
@@ -1490,9 +1511,9 @@ export default function TeamManager() {
                     <button onClick={() => setIsEditingTitle(false)} className="p-1 bg-red-100 text-red-700 rounded hover:bg-red-200"><X className="w-4 h-4"/></button>
                 </div>
             ) : (
-                <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setTempTitle(projectTitle); setIsEditingTitle(true); }}>
+                <div className={`flex items-center gap-2 ${!isReadOnly ? 'cursor-pointer' : ''}`} onClick={() => { if(!isReadOnly) { setTempTitle(projectTitle); setIsEditingTitle(true); } }}>
                     <h1 className="text-lg font-bold text-slate-700 hover:text-blue-600">{projectTitle}</h1>
-                    <Pencil className="w-4 h-4 text-slate-400" />
+                    {!isReadOnly && <Pencil className="w-4 h-4 text-slate-400" />}
                 </div>
             )}
         </div>
@@ -1505,7 +1526,7 @@ export default function TeamManager() {
         <div className="mb-4 flex gap-2 items-start text-xs text-slate-500 bg-blue-50/50 p-2 rounded-lg border border-blue-100">
            <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
            <div>
-               <p>Drag and drop nama pemeriksa untuk mengurutkan/menukar/memindahkan pemeriksa atau klik pada nama untuk opsi perpindahan.</p>
+               <p>{isReadOnly ? 'Anda sedang dalam Mode Viewer. Fitur pengeditan dinonaktifkan.' : 'Drag and drop nama pemeriksa untuk mengurutkan/menukar/memindahkan pemeriksa atau klik pada nama untuk opsi perpindahan.'}</p>
                <p className="mt-0.5">Gunakan jaringan intranet BPK untuk menampilkan foto pemeriksa.</p>
            </div>
         </div>
@@ -1514,21 +1535,25 @@ export default function TeamManager() {
           {objects.length === 0 ? (
              <div className="col-span-full flex flex-col items-centerjustify-center p-10 bg-white border border-dashed border-slate-300 rounded-lg text-center">
                  <ShieldCheck className="w-12 h-12 text-slate-300 mb-2 mx-auto" />
-                 <p className="text-slate-500 font-medium">Belum ada Objek Pemeriksaan</p>
-                 <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Silakan Tambah Objek Pemeriksaan terlebih dahulu untuk konfigurasi nama objek pemeriksaan dan komposisi tim pemeriksa</p>
+                 <p className="text-slate-500 font-medium">{isReadOnly ? 'Belum ada data Objek Pemeriksaan dimuat.' : 'Belum ada Objek Pemeriksaan'}</p>
+                 {!isReadOnly && <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Silakan Tambah Objek Pemeriksaan terlebih dahulu untuk konfigurasi nama objek pemeriksaan dan komposisi tim pemeriksa</p>}
+                 {!isReadOnly && (
                  <Button variant="gold" className="mt-4" onClick={() => { setEditingObject(null); setShowObjectModal(true); }}>
                     <Plus className="w-4 h-4" /> Tambah Objek Baru
                  </Button>
+                 )}
              </div>
           ) : (
           objects.map(obj => (
-            <div key={obj.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-visible flex flex-col hover:shadow-md transition-shadow relative hover:z-[40] focus-within:z-[50]">
+            <div key={obj.id} className={`bg-white rounded-lg border border-slate-200 shadow-sm overflow-visible flex flex-col transition-shadow relative ${!isReadOnly ? 'hover:shadow-md hover:z-[40] focus-within:z-[50]' : ''}`}>
               <div className="bg-slate-800 px-3 py-2 border-b border-slate-700 flex justify-between items-center group rounded-t-lg">
                  <h3 className="font-bold text-white text-sm truncate max-w-[150px]" title={obj.name}>{obj.name}</h3>
+                 {!isReadOnly && (
                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button className="text-slate-400 hover:text-white hover:bg-slate-700/50 p-1.5 rounded" onClick={() => { setEditingObject(obj); setShowObjectModal(true); }}><Pencil className="w-3 h-3" /></button>
                     <button className="text-slate-400 hover:text-white hover:bg-slate-700/50 p-1.5 rounded" onClick={() => deleteObject(obj.id)}><Trash2 className="w-3 h-3 text-red-400" /></button>
                  </div>
+                 )}
               </div>
               <div className="p-2 space-y-1 relative z-10">
                 {ROLES.map(role => {
@@ -1538,20 +1563,20 @@ export default function TeamManager() {
                     const examiner = getExaminerInSlot(obj.id, role.key, idx);
                     return (
                         <React.Fragment key={`${role.key}-${idx}`}>
-                           <div className="h-2 -my-1 w-full z-20" data-is-gap="true" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}></div>
-                           <div className="flex items-center gap-2 relative" onDragOver={e => e.preventDefault()} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}>
+                           {!isReadOnly && <div className="h-2 -my-1 w-full z-20" data-is-gap="true" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}></div>}
+                           <div className="flex items-center gap-2 relative" onDragOver={e => !isReadOnly && e.preventDefault()} onDrop={(e) => !isReadOnly && handleDrop(e, obj.id, role.key, idx)}>
                             <div className={`w-10 shrink-0 text-[10px] py-1 text-center rounded font-bold uppercase ${role.color}`}>{role.short}</div>
                             <div className="flex-1 min-w-0 relative"> 
                               {examiner ? (
-                                <div draggable onDragStart={() => { dragItem.current = { examiner, sourceObjId: obj.id, sourceRole: role.key, sourceIndex: idx }; }} className="group bg-white border border-slate-200 rounded p-1 shadow-sm hover:border-amber-400 flex items-center gap-2 cursor-grab active:cursor-grabbing">
-                                  <GripVertical className="w-3 h-3 text-slate-300" />
+                                <div draggable={!isReadOnly} onDragStart={() => { dragItem.current = { examiner, sourceObjId: obj.id, sourceRole: role.key, sourceIndex: idx }; }} className={`group bg-white border border-slate-200 rounded p-1 shadow-sm flex items-center gap-2 ${!isReadOnly ? 'hover:border-amber-400 cursor-grab active:cursor-grabbing' : ''}`}>
+                                  {!isReadOnly && <GripVertical className="w-3 h-3 text-slate-300" />}
                                   <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0 overflow-hidden">
                                       <img src={examiner.photo || (examiner.nip_bpk ? `https://sisdm.bpk.go.id/photo/${examiner.nip_bpk}/md.jpg` : "icon.jpg")} alt={getInitials(examiner.name)} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.parentNode.innerText = getInitials(examiner.name); }} />
                                   </div>
-                                  <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleContextMenu(e, examiner.id, obj.id, `${role.key}_${idx}`); }}><div className="text-xs font-semibold text-slate-800 truncate">{examiner.name}</div></div>
-                                  <button onClick={() => removeAssignment(obj.id, role.key, idx)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500"><X className="w-3 h-3" /></button>
+                                  <div className={`flex-1 min-w-0 ${!isReadOnly ? 'cursor-pointer' : ''}`} onClick={(e) => { if(!isReadOnly) { e.stopPropagation(); handleContextMenu(e, examiner.id, obj.id, `${role.key}_${idx}`); } }}><div className="text-xs font-semibold text-slate-800 truncate">{examiner.name}</div></div>
+                                  {!isReadOnly && <button onClick={() => removeAssignment(obj.id, role.key, idx)} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500"><X className="w-3 h-3" /></button>}
                                 </div>
-                              ) : <SlotSearch examiners={examiners} onSelect={(eid) => updateAssignment(obj.id, role.key, idx, eid)} />}
+                              ) : (isReadOnly ? <div className="text-[10px] text-slate-400 italic p-2 border border-dashed rounded bg-slate-50">Kosong</div> : <SlotSearch examiners={examiners} onSelect={(eid) => updateAssignment(obj.id, role.key, idx, eid)} />)}
                             </div>
                           </div>
                       </React.Fragment>
