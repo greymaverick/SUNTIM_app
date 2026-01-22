@@ -362,10 +362,9 @@ const ExaminerForm = ({ initialData, onSave, onCancel, masterData }) => {
             
             <Input 
                 name="edu" 
-                label="Latar Pendidikan" 
+                label={<span>Latar Pendidikan <span className="text-[10px] font-normal text-slate-400 italic ml-1">(dapat dikosongkan, isian ini berfungsi untuk analitik pada menu Analitik & Monitoring)</span></span>}
                 value={formData.edu} 
                 onChange={e => setFormData({...formData, edu: e.target.value})} 
-                required 
             />
 
             <div className="flex justify-end gap-2 mt-6">
