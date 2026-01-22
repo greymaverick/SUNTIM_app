@@ -197,6 +197,19 @@ const Input = ({ label, ...props }) => (
   </div>
 );
 
+const JABATAN_OPTIONS = [
+    "Kepala Perwakilan",
+    "Kepala Bidang Pemeriksaan",
+    "Kepala Sekretariat",
+    "Kepala Subbagian",
+    "Pemeriksa Ahli Utama",
+    "Pemeriksa Ahli Madya",
+    "Pemeriksa Ahli Muda",
+    "Pemeriksa Ahli Pertama",
+    "Lainnya",
+    "CPNS"
+];
+
 // --- New Feature: Examiner Form with Autocomplete ---
 const ExaminerForm = ({ initialData, onSave, onCancel, masterData }) => {
     const [formData, setFormData] = useState({ 
@@ -208,6 +221,10 @@ const ExaminerForm = ({ initialData, onSave, onCancel, masterData }) => {
     });
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    
+    // Jabatan Autocomplete State
+    const [jabatanSuggestions, setJabatanSuggestions] = useState([]);
+    const [showJabatanSuggestions, setShowJabatanSuggestions] = useState(false);
 
     const handleNameChange = (e) => {
         const val = e.target.value;
@@ -218,6 +235,18 @@ const ExaminerForm = ({ initialData, onSave, onCancel, masterData }) => {
             setShowSuggestions(true);
         } else {
             setShowSuggestions(false);
+        }
+    };
+    
+    const handleJabatanChange = (e) => {
+        const val = e.target.value;
+        setFormData(prev => ({ ...prev, jabatan: val }));
+        if (val.length >= 0) { // Show all if empty or match
+            const matches = JABATAN_OPTIONS.filter(j => j.toLowerCase().includes(val.toLowerCase()));
+            setJabatanSuggestions(matches);
+            setShowJabatanSuggestions(true);
+        } else {
+            setShowJabatanSuggestions(false);
         }
     };
 
@@ -232,6 +261,11 @@ const ExaminerForm = ({ initialData, onSave, onCancel, masterData }) => {
         }));
         setShowSuggestions(false);
     };
+
+    const selectJabatan = (j) => {
+        setFormData(prev => ({ ...prev, jabatan: j }));
+        setShowJabatanSuggestions(false);
+    }
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -248,6 +282,12 @@ const ExaminerForm = ({ initialData, onSave, onCancel, masterData }) => {
                     onChange={handleNameChange}
                     onFocus={() => formData.name.length > 2 && setShowSuggestions(true)}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && showSuggestions && suggestions.length > 0) {
+                            e.preventDefault();
+                            selectMaster(suggestions[0]);
+                        }
+                    }}
                     placeholder="Ketik nama untuk mencari..."
                     required 
                     autoComplete="off"
@@ -284,13 +324,41 @@ const ExaminerForm = ({ initialData, onSave, onCancel, masterData }) => {
                 className="w-full bg-slate-100 border border-slate-200 text-slate-500 px-3 py-2 rounded-lg cursor-not-allowed text-sm"
             />
 
-            <Input 
-                name="jabatan" 
-                label="Jabatan" 
-                value={formData.jabatan} 
-                onChange={e => setFormData({...formData, jabatan: e.target.value})} 
-                required 
-            />
+            <div className="relative">
+                <Input 
+                    name="jabatan" 
+                    label="Jabatan" 
+                    value={formData.jabatan} 
+                    onChange={handleJabatanChange} 
+                    onFocus={() => { 
+                         setJabatanSuggestions(JABATAN_OPTIONS.filter(j => j.toLowerCase().includes(formData.jabatan.toLowerCase())));
+                         setShowJabatanSuggestions(true); 
+                    }}
+                    onBlur={() => setTimeout(() => setShowJabatanSuggestions(false), 200)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && showJabatanSuggestions && jabatanSuggestions.length > 0) {
+                            e.preventDefault();
+                            selectJabatan(jabatanSuggestions[0]);
+                        }
+                    }}
+                    placeholder="Pilih atau ketik jabatan..."
+                    required 
+                    autoComplete="off"
+                />
+                {showJabatanSuggestions && jabatanSuggestions.length > 0 && (
+                     <div className="absolute top-[60px] left-0 w-full bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden max-h-48 overflow-y-auto custom-scrollbar">
+                        {jabatanSuggestions.map((j, i) => (
+                            <div 
+                                key={i} 
+                                className="px-4 py-2 hover:bg-amber-50 cursor-pointer text-sm border-b border-slate-50 last:border-0 text-slate-700"
+                                onClick={() => selectJabatan(j)}
+                            >
+                                {j}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
             
             <Input 
                 name="edu" 
@@ -2214,21 +2282,35 @@ export default function TeamManager() {
                 const ctxEx = examiners.find(e => e.id === contextMenu.examinerId);
                 if (!ctxEx) return null;
                 return (
-                  <div className="relative w-full h-40 bg-slate-100 flex flex-col items-center justify-center border-b border-slate-200">
+                  <div className="relative w-full bg-slate-100 flex flex-col items-center justify-center border-b border-slate-200 py-4">
                       <div className="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden mb-2">
                           <img src={ctxEx.photo || (ctxEx.nip_bpk ? `https://sisdm.bpk.go.id/photo/${ctxEx.nip_bpk}/md.jpg` : "icon.jpg")} alt={ctxEx.name} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.style.display='none'; e.target.parentNode.innerText = getInitials(ctxEx.name); e.target.parentNode.className += " flex items-center justify-center bg-slate-200 text-slate-500 font-bold text-2xl"; }} />
                       </div>
-                      <div className="px-2 w-full text-center">
+                      <div className="px-2 w-full text-center flex flex-col items-center">
                         <div className="text-sm font-bold text-slate-800 truncate">{ctxEx.name}</div>
-                        <div className="text-xs text-slate-500 truncate">{ctxEx.jabatan}</div>
+                        <div className="text-xs text-slate-600 font-mono my-0.5 bg-slate-200 inline-block px-1 rounded">{ctxEx.nip_18 || '-'}</div>
+                        <div className="text-xs text-slate-500 truncate mb-1">{ctxEx.jabatan}</div>
+                        <button 
+                            className="bg-white border border-slate-300 px-3 py-1 rounded shadow-sm hover:bg-amber-50 hover:text-amber-600 transition-colors flex items-center gap-1 text-[10px] font-semibold text-slate-600"
+                            onClick={(e) => { e.stopPropagation(); setMoveSubMenu('change_role_select'); }}
+                            title="Ubah Peran Personil Ini"
+                        >
+                            <Edit3 className="w-3 h-3"/> Ubah Peran
+                        </button>
                       </div>
                   </div>
                 );
               })()}
-              <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 text-xs font-bold text-slate-500">Opsi Perpindahan</div>
+              {moveSubMenu !== 'change_role_select' ? (
+                 <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 text-xs font-bold text-slate-500">Opsi Perpindahan</div>
+              ) : (
+                 <div className="bg-amber-50 px-3 py-2 border-b border-amber-100 text-xs font-bold text-amber-700 flex justify-between items-center">
+                    <span>Pilih Peran Baru</span>
+                    <button onClick={(e) => { e.stopPropagation(); setMoveSubMenu(null); }} className="text-amber-700 hover:bg-amber-100 rounded px-1"><X className="w-3 h-3"/></button>
+                 </div>
+              )}
               {moveSubMenu === null && (
                 <div className="p-1">
-                  <button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('change_role_select'); }}><span>Ubah Peran...</span><ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button>
                   <button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('move_target_list'); }}><span>Pindahkan ke...</span><ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button>
                   <button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('swap_target_list'); }}><span>Tukar dengan...</span><ArrowRightLeft className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button>
                   <div className="border-t border-slate-100 my-1"></div>
@@ -2237,7 +2319,7 @@ export default function TeamManager() {
               )}
               {moveSubMenu === 'change_role_select' && (
                 <div className="p-1 max-h-60 overflow-y-auto">
-                    <button className="w-full text-left px-2 py-1 text-xs text-slate-400 mb-1 flex items-center" onClick={(e) => { e.stopPropagation(); setMoveSubMenu(null); }}><ChevronDown className="w-3 h-3 rotate-90 mr-1"/> Kembali</button>
+                    {/* Removed Back button, already have close button in header */}
                     {ROLES.filter(r => r.key !== contextMenu.sourceKey.split('_')[0]).map(role => (
                         <button key={role.key} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex items-center gap-2" onClick={() => handleChangeRole(role.key)}>
                             <div className={`w-2 h-2 rounded-full ${role.color.split(' ')[0]}`}></div>
