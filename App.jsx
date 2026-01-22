@@ -1690,13 +1690,6 @@ export default function TeamManager() {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto py-4 space-y-2">
-         <div className="px-2">
-          {sidebarOpen && <div className="text-xs font-bold text-slate-500 uppercase px-2 mb-2">KONFIGURASI DATA</div>}
-          <button onClick={() => setActiveMenu('examiners')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${activeMenu === 'examiners' ? 'bg-amber-500 text-white' : 'hover:bg-slate-800'}`}>
-            <Users className="w-5 h-5 shrink-0" />{sidebarOpen && <span>Pemeriksa</span>}
-          </button>
-        </div>
-        <div className="border-t border-slate-800 my-2 mx-4"></div>
         <div className="px-2">
            {sidebarOpen && <div className="text-xs font-bold text-slate-500 uppercase px-2 mb-2">Manajemen</div>}
            <button onClick={() => setActiveMenu('team_builder')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${activeMenu === 'team_builder' ? 'bg-amber-500 text-white' : 'hover:bg-slate-800'}`}>
@@ -1704,6 +1697,13 @@ export default function TeamManager() {
           </button>
           <button onClick={() => setActiveMenu('analytics')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${activeMenu === 'analytics' ? 'bg-amber-500 text-white' : 'hover:bg-slate-800'} mt-1`}>
             <BarChart3 className="w-5 h-5 shrink-0" />{sidebarOpen && <span>Analitik & Monitoring</span>}
+          </button>
+        </div>
+        <div className="border-t border-slate-800 my-2 mx-4"></div>
+         <div className="px-2">
+          {sidebarOpen && <div className="text-xs font-bold text-slate-500 uppercase px-2 mb-2">KONFIGURASI DATA</div>}
+          <button onClick={() => setActiveMenu('examiners')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${activeMenu === 'examiners' ? 'bg-amber-500 text-white' : 'hover:bg-slate-800'}`}>
+            <Users className="w-5 h-5 shrink-0" />{sidebarOpen && <span>Pemeriksa</span>}
           </button>
         </div>
       </div>
