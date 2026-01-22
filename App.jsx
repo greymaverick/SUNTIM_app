@@ -1714,7 +1714,7 @@ export default function TeamManager() {
                   <img src="BPK.png" alt="BPK" className="h-16 w-auto object-contain" onError={(e) => e.target.style.display='none'} />
                   <img src="SINER6I.png" alt="Sinergi" className="h-16 w-auto object-contain" onError={(e) => e.target.style.display='none'} />
               </div>
-              <div className="mb-1">Aplikasi {APP_NAME} v1.0</div>
+              <div className="mb-1">{APP_NAME} v1.0</div>
               <div>&copy; {YEAR} <a href="https://bpkgoid.sharepoint.com/sites/DACBPKBALI/SitePages/HOME.aspx" target="_blank" rel="noopener noreferrer" className="font-bold text-amber-500 hover:text-amber-400 transition-colors">{DEVELOPER_NAME}</a></div>
           </div>
       )}
