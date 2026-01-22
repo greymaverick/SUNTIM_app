@@ -5,7 +5,7 @@ import {
   Plus, Trash2, Users, User, GripVertical, Save, Briefcase, 
   X, Sparkles, Menu, ChevronRight, ChevronDown, FileSpreadsheet, 
   ArrowRightLeft, LogOut, Search, Download, ArrowUpDown, Filter, Check, MoreVertical, 
-  Copyright, ShieldCheck, Pencil, AlertTriangle, Info, BarChart3, PieChart, Activity, CheckCircle2, List, FileDown, Upload, FolderOpen, ArrowDownAZ, ArrowDownWideNarrow, CalendarClock, FileText, Printer, Edit3
+  Copyright, ShieldCheck, Pencil, AlertTriangle, Info, BarChart3, PieChart, Activity, CheckCircle2, List, FileDown, Upload, FolderOpen, ArrowDownAZ, ArrowDownWideNarrow, CalendarClock, FileText, Printer, Edit3, Undo2, Redo2
 } from 'lucide-react';
 
 // --- Constants ---
@@ -196,6 +196,117 @@ const Input = ({ label, ...props }) => (
     />
   </div>
 );
+
+// --- New Feature: Examiner Form with Autocomplete ---
+const ExaminerForm = ({ initialData, onSave, onCancel, masterData }) => {
+    const [formData, setFormData] = useState({ 
+        name: initialData?.name || '', 
+        nip_bpk: initialData?.nip_bpk || '', 
+        nip_18: initialData?.nip_18 || '', 
+        jabatan: initialData?.jabatan || '', 
+        edu: initialData?.edu || '' 
+    });
+    const [suggestions, setSuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+
+    const handleNameChange = (e) => {
+        const val = e.target.value;
+        setFormData(prev => ({ ...prev, name: val }));
+        if (val.length > 2 && masterData.length > 0) {
+            const matches = masterData.filter(m => m.name.toLowerCase().includes(val.toLowerCase())).slice(0, 5);
+            setSuggestions(matches);
+            setShowSuggestions(true);
+        } else {
+            setShowSuggestions(false);
+        }
+    };
+
+    const selectMaster = (m) => {
+        setFormData(prev => ({ 
+            ...prev, 
+            name: m.name, 
+            nip_bpk: m.nip_bpk, 
+            nip_18: m.nip_18,
+            // Assuming master data might have email, but we don't display it. 
+            // Keep Jabatan/Edu manual or whatever logic
+        }));
+        setShowSuggestions(false);
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave(formData);
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="relative">
+                <Input 
+                    name="name" 
+                    label="Nama Lengkap" 
+                    value={formData.name} 
+                    onChange={handleNameChange}
+                    onFocus={() => formData.name.length > 2 && setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    placeholder="Ketik nama untuk mencari..."
+                    required 
+                    autoComplete="off"
+                />
+                {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute top-[60px] left-0 w-full bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden">
+                        {suggestions.map((m, i) => (
+                            <div 
+                                key={i} 
+                                className="px-4 py-2 hover:bg-amber-50 cursor-pointer text-sm border-b border-slate-50 last:border-0"
+                                onClick={() => selectMaster(m)}
+                            >
+                                <div className="font-bold text-slate-800">{m.name}</div>
+                                <div className="text-xs text-slate-500">{m.nip_bpk} • {m.nip_18}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <Input 
+                name="nip_bpk" 
+                label="NIP BPK" 
+                value={formData.nip_bpk} 
+                readOnly 
+                className="w-full bg-slate-100 border border-slate-200 text-slate-500 px-3 py-2 rounded-lg cursor-not-allowed text-sm"
+            />
+            
+            <Input 
+                name="nip_18" 
+                label="NIP 18 Digit" 
+                value={formData.nip_18} 
+                readOnly 
+                className="w-full bg-slate-100 border border-slate-200 text-slate-500 px-3 py-2 rounded-lg cursor-not-allowed text-sm"
+            />
+
+            <Input 
+                name="jabatan" 
+                label="Jabatan" 
+                value={formData.jabatan} 
+                onChange={e => setFormData({...formData, jabatan: e.target.value})} 
+                required 
+            />
+            
+            <Input 
+                name="edu" 
+                label="Latar Pendidikan" 
+                value={formData.edu} 
+                onChange={e => setFormData({...formData, edu: e.target.value})} 
+                required 
+            />
+
+            <div className="flex justify-end gap-2 mt-6">
+                <Button type="submit" variant="gold">Simpan</Button>
+                <Button type="button" variant="ghost" onClick={onCancel}>Batal</Button>
+            </div>
+        </form>
+    );
+};
 
 const SortIcon = ({ active, direction }) => {
   if (!active) return <ArrowUpDown className="w-3 h-3 text-slate-300 ml-1 inline" />;
@@ -503,6 +614,7 @@ const DrillDownModal = ({ isOpen, onClose, title, data }) => {
 export default function TeamManager() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeMenu, setActiveMenu] = useState('team_builder'); 
+  const [activeDeleteSlot, setActiveDeleteSlot] = useState(null); // Smart Board UX
   const [objects, setObjects] = useState(INITIAL_OBJECTS);
   const [examiners, setExaminers] = useState(INITIAL_EXAMINERS);
   const [assignments, setAssignments] = useState({});
@@ -544,6 +656,94 @@ export default function TeamManager() {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, examinerId: null, sourceObjId: null, sourceKey: null });
   const [moveSubMenu, setMoveSubMenu] = useState(null); 
   const [selectedTargetObjId, setSelectedTargetObjId] = useState(null);
+
+  // Undo/Redo State
+  const [history, setHistory] = useState([]);
+  const [historyStep, setHistoryStep] = useState(-1);
+
+  // Master Data
+  const [masterExaminers, setMasterExaminers] = useState([]);
+
+  useEffect(() => {
+    fetch("https://docs.google.com/spreadsheets/d/e/2PACX-1vTqy2RlO-gEG-j-JMYsGR-VB_pLsnca-NYvuv2zSoBvvTPPDxKg2hQboiiGNYG2eAtI7fERFH5LgZB7/pub?gid=0&single=true&output=csv")
+        .then(res => res.text())
+        .then(text => {
+            const lines = text.split('\n').filter(l => l.trim());
+            // Assuming headers are row 0. Data starts row 1.
+            // Columns: A=NIP BPK, B=NIP 18, C=Name, D=Email
+            const data = lines.slice(1).map(line => {
+                 // Simple CSV parser handling quotes
+                 const values = [];
+                 let current = '';
+                 let inQuote = false;
+                 for(let i=0; i<line.length; i++){
+                     const char = line[i];
+                     if(char === '"') { inQuote = !inQuote; }
+                     else if(char === ',' && !inQuote) { values.push(current.trim()); current = ''; }
+                     else { current += char; }
+                 }
+                 values.push(current.trim());
+                 
+                 return {
+                     nip_bpk: values[0] || '',
+                     nip_18: values[1] || '',
+                     name: values[2] || '',
+                     email: values[3] || ''
+                 };
+            });
+            setMasterExaminers(data);
+        })
+        .catch(err => console.error("Failed to load master data", err));
+  }, []);
+
+  const updateWorkspace = (newObjects, newAssignments) => {
+      let newHistory = [...history];
+      let newStep = historyStep;
+      
+      // Initialize history if empty (push current state as baseline)
+      if (newHistory.length === 0 || newStep === -1) {
+          newHistory = [{ objects: JSON.parse(JSON.stringify(objects)), assignments: JSON.parse(JSON.stringify(assignments)) }];
+          newStep = 0;
+      } else {
+          // Truncate future if we are in the middle of history
+          newHistory = newHistory.slice(0, newStep + 1);
+      }
+
+      newHistory.push({ objects: newObjects, assignments: newAssignments });
+      newStep++;
+
+      // Limit history to 50 steps to prevent memory issues
+      if (newHistory.length > 50) {
+          newHistory.shift();
+          newStep--;
+      }
+
+      setHistory(newHistory);
+      setHistoryStep(newStep);
+      
+      setObjects(newObjects);
+      setAssignments(newAssignments);
+  };
+
+  const undo = () => {
+      if (historyStep > 0) {
+          const prevStep = historyStep - 1;
+          const prevState = history[prevStep];
+          setObjects(prevState.objects);
+          setAssignments(prevState.assignments);
+          setHistoryStep(prevStep);
+      }
+  };
+
+  const redo = () => {
+      if (historyStep < history.length - 1) {
+          const nextStep = historyStep + 1;
+          const nextState = history[nextStep];
+          setObjects(nextState.objects);
+          setAssignments(nextState.assignments);
+          setHistoryStep(nextStep);
+      }
+  };
 
   // --- Persistence ---
   useEffect(() => {
@@ -664,6 +864,8 @@ export default function TeamManager() {
     reader.onload = (evt) => {
       try { const json = JSON.parse(evt.target.result); if (json.objects) { showConfirm("Muat Proyek?", "Data lama akan ditimpa.", () => { 
           setObjects(json.objects); setExaminers(json.examiners); setAssignments(json.assignments); 
+          // Reset History on Load
+          setHistory([]); setHistoryStep(-1);
           if(json.status) setProjectStatus(json.status); 
           if(json.timestamp) setLastSaved(json.timestamp);
           if(json.projectTitle) setProjectTitle(json.projectTitle);
@@ -1142,14 +1344,32 @@ export default function TeamManager() {
         showAlert("Sukses", "Daftar diurutkan."); 
     }, "Urutkan"); 
   };
-  const autoSortTeams = () => { showConfirm("Urutkan Tim?", "Personil diurutkan sesuai database.", () => { setAssignments(prev => { const next={...prev}; Object.keys(next).forEach(objId=>{ const groups={}; Object.keys(next[objId]).forEach(k=>{ const r=k.split('_')[0]; if(!groups[r])groups[r]=[]; groups[r].push(next[objId][k]); }); Object.keys(groups).forEach(r=>{ groups[r].sort((a,b)=>examiners.findIndex(e=>e.id===a)-examiners.findIndex(e=>e.id===b)); groups[r].forEach((id,i)=>next[objId][`${r}_${i}`]=id); }); }); return next; }); showAlert("Sukses", "Tim diurutkan."); }, "Urutkan"); };
+  const autoSortTeams = () => { showConfirm("Urutkan Tim?", "Personil akan diurutkan sesuai database pada menu Pemeriksa.", () => { setAssignments(prev => { const next={...prev}; Object.keys(next).forEach(objId=>{ const groups={}; Object.keys(next[objId]).forEach(k=>{ const r=k.split('_')[0]; if(!groups[r])groups[r]=[]; groups[r].push(next[objId][k]); }); Object.keys(groups).forEach(r=>{ groups[r].sort((a,b)=>examiners.findIndex(e=>e.id===a)-examiners.findIndex(e=>e.id===b)); groups[r].forEach((id,i)=>next[objId][`${r}_${i}`]=id); }); }); return next; }); showAlert("Sukses", "Tim diurutkan."); }, "Urutkan"); };
 
   // CRUD
   const saveObject = (e) => { e.preventDefault(); const fd = new FormData(e.target); const slots = {}; ROLES.forEach(r => slots[r.key] = parseInt(fd.get(`slot_${r.key}`)||0)); const newObj = { id: editingObject ? editingObject.id : `obj${Date.now()}`, name: fd.get('name'), slots }; if(editingObject) setObjects(prev=>prev.map(o=>o.id===editingObject.id?newObj:o)); else setObjects(prev=>[...prev, newObj]); setShowObjectModal(false); };
   const deleteObject = (id) => showConfirm("Hapus Obrik?", "Data ploting akan hilang.", () => { setObjects(prev=>prev.filter(o=>o.id!==id)); setAssignments(prev=>{const n={...prev};delete n[id];return n;}); });
   const deleteAllExaminers = () => showConfirm("Hapus Semua?", "Tak bisa dibatalkan.", () => setExaminers([]));
   const deleteExaminer = (id) => showConfirm("Hapus Data?", "Hapus permanen.", () => setExaminers(prev=>prev.filter(e=>e.id!==id)));
-  const saveExaminer = (e) => { e.preventDefault(); const fd = new FormData(e.target); const newEx = { id: editingExaminer?editingExaminer.id:`p${Date.now()}`, name:fd.get('name'), nip_bpk:fd.get('nip_bpk'), nip_18:fd.get('nip_18'), jabatan:fd.get('jabatan'), edu:fd.get('edu'), gender:determineGenderFromNIP(fd.get('nip_18')), status:true, reason:'', photo:''}; if(editingExaminer) setExaminers(prev=>prev.map(ex=>ex.id===editingExaminer.id?{...newEx, status:editingExaminer.status, reason:editingExaminer.reason}:ex)); else setExaminers(prev=>[...prev, newEx]); setShowExaminerModal(false); };
+  
+  const saveExaminer = (formData) => { // Refactored to accept object
+    const newEx = { 
+        id: editingExaminer ? editingExaminer.id : `p${Date.now()}`, 
+        name: formData.name, 
+        nip_bpk: formData.nip_bpk, 
+        nip_18: formData.nip_18, 
+        jabatan: formData.jabatan, 
+        edu: formData.edu, 
+        gender: determineGenderFromNIP(formData.nip_18), 
+        status: true, 
+        reason: '', 
+        photo: '' 
+    }; 
+    if(editingExaminer) setExaminers(prev=>prev.map(ex=>ex.id===editingExaminer.id?{...newEx, status:editingExaminer.status, reason:editingExaminer.reason}:ex)); 
+    else setExaminers(prev=>[...prev, newEx]); 
+    setShowExaminerModal(false); 
+  };
+  
   const toggleStatus = (id) => { const ex = examiners.find(e=>e.id===id); if(ex.status) { setStatusReasonModal({open:true, examinerId:id}); setTempReason(''); } else setExaminers(prev=>prev.map(e=>e.id===id?{...e, status:true, reason:''}:e)); };
   const confirmStatusReason = () => { setExaminers(prev=>prev.map(e=>e.id===statusReasonModal.examinerId?{...e, status:false, reason:tempReason}:e)); setStatusReasonModal({open:false, examinerId:null}); };
 
@@ -1161,46 +1381,54 @@ export default function TeamManager() {
     const isGap = e.currentTarget.dataset.isGap === "true";
     const {examiner, sourceObjId, sourceRole, sourceIndex} = dragItem.current;
     
-    setAssignments(prev => {
-        const next = JSON.parse(JSON.stringify(prev));
-        if(!next[tObjId]) next[tObjId] = {};
-        
-        if (sourceObjId !== 'unassigned') {
-             if(!next[sourceObjId]) next[sourceObjId] = {};
-             delete next[sourceObjId][`${sourceRole}_${sourceIndex}`]; // Remove from source
-        }
+    // Calculate New Assignments 
+    const next = JSON.parse(JSON.stringify(assignments));
+    if(!next[tObjId]) next[tObjId] = {};
+    
+    if (sourceObjId !== 'unassigned') {
+            if(!next[sourceObjId]) next[sourceObjId] = {};
+            delete next[sourceObjId][`${sourceRole}_${sourceIndex}`]; // Remove from source
+    }
 
-        if (isGap) {
-            // INSERT LOGIC
-            const targetCapacity = objects.find(o=>o.id===tObjId).slots[tRole];
-            let list = [];
-            for(let i=0; i<targetCapacity; i++) list.push(next[tObjId][`${tRole}_${i}`]);
-            
-            // Remove nulls and insert new item
-            const compacted = list.filter(id => id);
-            
-            // If dragging within same list, ensure we don't have dupes (already deleted above, but index might shift)
-            // The simple logic: insert at tIdx. 
-            compacted.splice(tIdx, 0, examiner.id);
-            
-            // Re-assign slots
-            for(let i=0; i<targetCapacity; i++) {
-                if(i < compacted.length) next[tObjId][`${tRole}_${i}`] = compacted[i];
-                else delete next[tObjId][`${tRole}_${i}`];
-            }
-        } else {
-            // SWAP LOGIC
-            const targetEx = getExaminerInSlot(tObjId, tRole, tIdx);
-            if(targetEx && sourceObjId !== 'unassigned') {
-                next[sourceObjId][`${sourceRole}_${sourceIndex}`] = targetEx.id;
-            }
-            next[tObjId][`${tRole}_${tIdx}`] = examiner.id;
+    if (isGap) {
+        // INSERT LOGIC
+        const targetCapacity = objects.find(o=>o.id===tObjId).slots[tRole];
+        let list = [];
+        for(let i=0; i<targetCapacity; i++) list.push(next[tObjId][`${tRole}_${i}`]);
+        
+        // Remove nulls and insert new item
+        const compacted = list.filter(id => id);
+        
+        // If dragging within same list, ensure we don't have dupes (already deleted above, but index might shift)
+        // The simple logic: insert at tIdx. 
+        compacted.splice(tIdx, 0, examiner.id);
+        
+        // Re-assign slots
+        for(let i=0; i<targetCapacity; i++) {
+            if(i < compacted.length) next[tObjId][`${tRole}_${i}`] = compacted[i];
+            else delete next[tObjId][`${tRole}_${i}`];
         }
-        return next;
-    });
+    } else {
+        // SWAP LOGIC
+        const targetEx = getExaminerInSlot(tObjId, tRole, tIdx);
+        if(targetEx && sourceObjId !== 'unassigned') {
+            next[sourceObjId][`${sourceRole}_${sourceIndex}`] = targetEx.id;
+        }
+        next[tObjId][`${tRole}_${tIdx}`] = examiner.id;
+    }
+    
+    // Update State & History
+    updateWorkspace(objects, next);
+    
     dragItem.current=null; 
   };
-  const removeAssignment = (objId, rKey, idx) => { setAssignments(prev=>{ const n={...prev}; if(n[objId]){ const no={...n[objId]}; delete no[`${rKey}_${idx}`]; n[objId]=no; } return n; }); };
+  const removeAssignment = (objId, rKey, idx) => { 
+      const next = JSON.parse(JSON.stringify(assignments));
+      if(next[objId]){ 
+          delete next[objId][`${rKey}_${idx}`]; 
+          updateWorkspace(objects, next);
+      } 
+  };
   const handleContextMenu = (e, exId, objId, slotKey) => { setContextMenu({ visible: true, x: e.clientX, y: e.clientY, examinerId: exId, sourceObjId: objId, sourceKey: slotKey }); setMoveSubMenu(null); setSelectedTargetObjId(null); };
 
   // --- Add/Delete Slot Logic ---
@@ -1208,36 +1436,34 @@ export default function TeamManager() {
 
   const handleDeleteSlot = (objId, roleKey, index) => {
     // Delete slot: remove assignment and shift others up
-    setAssignments(prev => {
-        const next = JSON.parse(JSON.stringify(prev));
-        if (!next[objId]) return next;
-        
-        delete next[objId][`${roleKey}_${index}`];
-        
-        const assignmentsToShift = [];
-        Object.keys(next[objId]).forEach(key => {
-            const parts = key.split('_');
-            const r = parts[0];
-            const i = parseInt(parts[1]);
-            if (r === roleKey && i > index) {
-                assignmentsToShift.push({ key, i, val: next[objId][key] });
-            }
-        });
-        assignmentsToShift.sort((a, b) => a.i - b.i);
-        assignmentsToShift.forEach(item => {
-            delete next[objId][item.key];
-            next[objId][`${roleKey}_${item.i - 1}`] = item.val;
-        });
-        return next;
+    const nextAssign = JSON.parse(JSON.stringify(assignments));
+    if (!nextAssign[objId]) return; 
+    
+    delete nextAssign[objId][`${roleKey}_${index}`];
+    
+    const assignmentsToShift = [];
+    Object.keys(nextAssign[objId]).forEach(key => {
+        const parts = key.split('_');
+        const r = parts[0];
+        const i = parseInt(parts[1]);
+        if (r === roleKey && i > index) {
+            assignmentsToShift.push({ key, i, val: nextAssign[objId][key] });
+        }
+    });
+    assignmentsToShift.sort((a, b) => a.i - b.i);
+    assignmentsToShift.forEach(item => {
+        delete nextAssign[objId][item.key];
+        nextAssign[objId][`${roleKey}_${item.i - 1}`] = item.val;
     });
 
     // Decrease slot count
-    setObjects(prev => prev.map(obj => {
+    const nextObjects = objects.map(obj => {
         if (obj.id !== objId) return obj;
         const newSlots = { ...obj.slots };
         newSlots[roleKey] = Math.max(0, (newSlots[roleKey] || 0) - 1);
         return { ...obj, slots: newSlots };
-    }));
+    });
+    updateWorkspace(nextObjects, nextAssign);
   };
 
 
@@ -1254,35 +1480,36 @@ export default function TeamManager() {
 
   const confirmAddSlot = (selectedRoleKey) => {
       const { objId, roleKey, index } = addSlotPopup;
-      setObjects(prev => prev.map(obj => {
+      
+      const newObjects = objects.map(obj => {
           if (obj.id !== objId) return obj;
           const newSlots = { ...obj.slots };
           newSlots[selectedRoleKey] = (newSlots[selectedRoleKey] || 0) + 1;
           return { ...obj, slots: newSlots };
-      }));
+      });
       
+      const nextAssign = JSON.parse(JSON.stringify(assignments));
       // Shift assignments if inserting into same role
       if (selectedRoleKey === roleKey) {
-          setAssignments(prev => {
-              const next = JSON.parse(JSON.stringify(prev));
-              if (!next[objId]) return next;
+          if (nextAssign[objId]) {
               const assignmentsToShift = [];
-              Object.keys(next[objId]).forEach(key => {
+              Object.keys(nextAssign[objId]).forEach(key => {
                   const parts = key.split('_');
                   const r = parts[0];
                   const i = parseInt(parts[1]);
                   if (r === roleKey && i >= index) {
-                      assignmentsToShift.push({ key, i, val: next[objId][key] });
+                      assignmentsToShift.push({ key, i, val: nextAssign[objId][key] });
                   }
               });
               assignmentsToShift.sort((a, b) => b.i - a.i);
               assignmentsToShift.forEach(item => {
-                  delete next[objId][item.key];
-                  next[objId][`${roleKey}_${item.i + 1}`] = item.val;
+                  delete nextAssign[objId][item.key];
+                  nextAssign[objId][`${roleKey}_${item.i + 1}`] = item.val;
               });
-              return next;
-          });
+          }
       }
+      
+      updateWorkspace(newObjects, nextAssign);
       setAddSlotPopup(prev => ({ ...prev, visible: false }));
   };
 
@@ -1290,31 +1517,28 @@ export default function TeamManager() {
       const { sourceObjId, examinerId, sourceKey } = contextMenu;
       const targetObjId = sourceObjId;
       
-      setAssignments(prev => {
-          const next = JSON.parse(JSON.stringify(prev));
-          if (!next[targetObjId]) next[targetObjId] = {};
-          
-          if (next[sourceObjId]) {
-              delete next[sourceObjId][sourceKey];
-          }
+      const nextAssign = JSON.parse(JSON.stringify(assignments));
+      if (!nextAssign[targetObjId]) nextAssign[targetObjId] = {};
+        
+      if (nextAssign[sourceObjId]) {
+            delete nextAssign[sourceObjId][sourceKey];
+      }
 
-          let targetIndex = -1;
-          const targetObjSlots = objects.find(o => o.id === targetObjId).slots[newRoleKey] || 0;
-          
-          for (let i = 0; i < targetObjSlots; i++) {
-              if (!next[targetObjId][`${newRoleKey}_${i}`]) {
-                  targetIndex = i;
-                  break;
-              }
-          }
+      let targetIndex = -1;
+      const targetObjSlots = objects.find(o => o.id === targetObjId).slots[newRoleKey] || 0;
+        
+      for (let i = 0; i < targetObjSlots; i++) {
+        if (!nextAssign[targetObjId][`${newRoleKey}_${i}`]) {
+            targetIndex = i;
+            break;
+        }
+      }
 
-          if (targetIndex === -1) {
-              targetIndex = targetObjSlots; 
-          }
-          
-          next[targetObjId][`${newRoleKey}_${targetIndex}`] = examinerId;
-          return next;
-      });
+      if (targetIndex === -1) {
+        targetIndex = targetObjSlots; 
+      }
+        
+      nextAssign[targetObjId][`${newRoleKey}_${targetIndex}`] = examinerId;
 
       const targetObj = objects.find(o => o.id === targetObjId);
       const currentSlots = targetObj.slots[newRoleKey] || 0;
@@ -1327,17 +1551,19 @@ export default function TeamManager() {
               break;
           }
       }
-      if (indexToAssign === -1) indexToAssign = currentSlots;
+      if (indexToAssign === -1) indexToAssign = currentSlots; // Logic duplicate but fine
       
-      if (indexToAssign >= currentSlots) {
-          setObjects(prev => prev.map(o => {
+      let nextObjects = objects;
+      if (targetIndex >= currentSlots) {
+           nextObjects = objects.map(o => {
               if (o.id !== targetObjId) return o;
               const newSlots = { ...o.slots };
               newSlots[newRoleKey] = (newSlots[newRoleKey] || 0) + 1;
               return { ...o, slots: newSlots };
-          }));
+          });
       }
 
+      updateWorkspace(nextObjects, nextAssign);
       setContextMenu({ visible: false, x: 0, y: 0, examinerId: null, sourceObjId: null, sourceKey: null });
   };
 
@@ -1685,6 +1911,9 @@ export default function TeamManager() {
                   if (count === 0) return null;
                   return Array.from({ length: count }).map((_, idx) => {
                     const examiner = getExaminerInSlot(obj.id, role.key, idx);
+                    const slotId = `${obj.id}_${role.key}_${idx}`;
+                    const isDeleteActive = activeDeleteSlot === slotId;
+                    
                     return (
                         <React.Fragment key={`${role.key}-${idx}`}>
                            <div 
@@ -1692,23 +1921,28 @@ export default function TeamManager() {
                                 data-is-gap="true" 
                                 onDragOver={(e) => e.preventDefault()} 
                                 onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}
-                                onClick={(e) => handleGapClick(e, obj.id, role.key, idx)}
                            >
                              <div className="absolute inset-0 flex items-center justify-end pr-4 pointer-events-none">
                                 <div 
-                                    className="opacity-0 group-hover/gap:opacity-100 transform scale-0 group-hover/gap:scale-100 transition-all duration-200 bg-amber-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg border-2 border-white z-30"
+                                    className="opacity-0 group-hover/gap:opacity-100 transform scale-0 group-hover/gap:scale-100 transition-all duration-200 bg-amber-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg border-2 border-white z-30 pointer-events-auto"
                                     title="Tambah Slot Peran"
+                                    onClick={(e) => handleGapClick(e, obj.id, role.key, idx)}
                                 >
                                     <Plus className="w-3 h-3" />
                                 </div>
                              </div>
                            </div>
                            <div className="flex items-center gap-2 relative py-0.5" onDragOver={e => e.preventDefault()} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}>
-                            <div className={`w-10 shrink-0 text-[10px] py-1 text-center rounded font-bold uppercase ${role.color} relative group/label cursor-pointer`}>
-                                <span className="group-hover/label:opacity-0 transition-opacity">{role.short}</span>
+                            <div 
+                                className={`w-10 shrink-0 text-[10px] py-1 text-center rounded font-bold uppercase ${role.color} relative cursor-pointer`}
+                                onMouseEnter={() => setActiveDeleteSlot(slotId)}
+                                onMouseLeave={() => setActiveDeleteSlot(null)}
+                                onClick={() => setActiveDeleteSlot(isDeleteActive ? null : slotId)}
+                            >
+                                <span className={`${isDeleteActive ? 'opacity-0' : 'opacity-100'} transition-opacity`}>{role.short}</span>
                                 <button 
                                     onClick={(e) => { e.stopPropagation(); handleDeleteSlot(obj.id, role.key, idx); }}
-                                    className="absolute inset-0 flex items-center justify-center bg-red-500 text-white rounded opacity-0 group-hover/label:opacity-100 transition-opacity"
+                                    className={`absolute inset-0 flex items-center justify-center bg-red-500 text-white rounded transition-opacity duration-200 ${isDeleteActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
                                     title="Hapus Slot"
                                 >
                                     <X className="w-3 h-3" />
@@ -1736,41 +1970,62 @@ export default function TeamManager() {
           ))
           )}
         </div>
-        {/* Floating Monitor */}
-        <div className="fixed bottom-8 right-8 z-50">
-          <button onClick={() => setIsMonitorOpen(!isMonitorOpen)} className={`relative flex items-center justify-center w-14 h-14 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95 ${unassigned.length > 0 ? 'bg-amber-500 text-white animate-pulse' : 'bg-green-500 text-white'}`}>
-             {unassigned.length > 0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">{unassigned.length}</span>}
-             {unassigned.length > 0 ? <AlertTriangle className="w-7 h-7" /> : <CheckCircle2 className="w-7 h-7" />}
-          </button>
-          {isMonitorOpen && (
-            <div className="absolute bottom-16 right-0 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-5">
-              <div className={`p-3 font-bold text-sm flex justify-between items-center ${unassigned.length > 0 ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>{unassigned.length > 0 ? `Belum Terplot (${unassigned.length})` : 'Semua Terplot!'}<button onClick={() => setIsMonitorOpen(false)}><X className="w-4 h-4 opacity-50 hover:opacity-100"/></button></div>
-              <div className="max-h-[400px] overflow-y-auto custom-scrollbar p-1">
-                {unassigned.length > 0 ? (
-                    unassigned.map(ex => (
-                        <div 
-                            key={ex.id} 
-                            className="p-2 flex items-center gap-2 hover:bg-slate-50 border-b border-slate-50 last:border-0 cursor-grab active:cursor-grabbing"
-                            draggable
-                            onDragStart={() => { 
-                                dragItem.current = { examiner: ex, sourceObjId: 'unassigned', sourceRole: null, sourceIndex: null }; 
-                                // Delay closing to prevent drag cancellation (because source element disappeared)
-                                setTimeout(() => setIsMonitorOpen(false), 50); 
-                            }}
-                        >
-                            <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500">{getInitials(ex.name)}</div>
-                            <div className="min-w-0">
-                                <div className="text-xs font-semibold text-slate-800 truncate">{ex.name}</div>
-                                <div className="text-[9px] text-slate-500 truncate">{ex.jabatan}</div>
-                            </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="p-4 text-center text-xs text-slate-400 italic">Great job! Semua personil aktif sudah masuk tim.</div>
-                )}
-              </div>
+        {/* Floating Monitor & Actions */}
+        <div className="fixed bottom-8 right-8 z-50 flex items-center gap-3">
+            {/* Undo/Redo Buttons */}
+            <div className="flex bg-white rounded-full shadow-lg border border-slate-200 overflow-hidden">
+                <button 
+                  onClick={undo} 
+                  disabled={historyStep <= 0}
+                  className="p-3 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors border-r border-slate-100"
+                  title="Undo (Ctrl+Z)"
+                >
+                    <Undo2 className="w-5 h-5 text-slate-700" />
+                </button>
+                <button 
+                  onClick={redo}
+                  disabled={historyStep >= history.length - 1}
+                  className="p-3 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Redo (Ctrl+Y)"
+                >
+                    <Redo2 className="w-5 h-5 text-slate-700" />
+                </button>
             </div>
-          )}
+
+            <div className="relative">
+                <button onClick={() => setIsMonitorOpen(!isMonitorOpen)} className={`relative flex items-center justify-center w-14 h-14 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95 ${unassigned.length > 0 ? 'bg-amber-500 text-white animate-pulse' : 'bg-green-500 text-white'}`}>
+                    {unassigned.length > 0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">{unassigned.length}</span>}
+                    {unassigned.length > 0 ? <AlertTriangle className="w-7 h-7" /> : <CheckCircle2 className="w-7 h-7" />}
+                </button>
+                {isMonitorOpen && (
+                    <div className="absolute bottom-16 right-0 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-5">
+                    <div className={`p-3 font-bold text-sm flex justify-between items-center ${unassigned.length > 0 ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>{unassigned.length > 0 ? `Belum Terplot (${unassigned.length})` : 'Semua Terplot!'}<button onClick={() => setIsMonitorOpen(false)}><X className="w-4 h-4 opacity-50 hover:opacity-100"/></button></div>
+                    <div className="max-h-[400px] overflow-y-auto custom-scrollbar p-1">
+                        {unassigned.length > 0 ? (
+                            unassigned.map(ex => (
+                                <div 
+                                    key={ex.id} 
+                                    className="p-2 flex items-center gap-2 hover:bg-slate-50 border-b border-slate-50 last:border-0 cursor-grab active:cursor-grabbing"
+                                    draggable
+                                    onDragStart={() => { 
+                                        dragItem.current = { examiner: ex, sourceObjId: 'unassigned', sourceRole: null, sourceIndex: null }; 
+                                        setTimeout(() => setIsMonitorOpen(false), 50); 
+                                    }}
+                                >
+                                    <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500">{getInitials(ex.name)}</div>
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-semibold text-slate-800 truncate">{ex.name}</div>
+                                        <div className="text-[9px] text-slate-500 truncate">{ex.jabatan}</div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-4 text-center text-xs text-slate-400 italic">Great job! Semua personil aktif sudah masuk tim.</div>
+                        )}
+                    </div>
+                    </div>
+                )}
+            </div>
         </div>
       </div>
     );
@@ -1942,7 +2197,14 @@ export default function TeamManager() {
         <DrillDownModal isOpen={drillDown.isOpen} title={drillDown.title} data={drillDown.data} onClose={() => setDrillDown({ ...drillDown, isOpen: false })} />
         <ConfirmModal isOpen={confirmState.isOpen} title={confirmState.title} message={confirmState.message} onConfirm={confirmState.onConfirm} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} confirmLabel={confirmState.confirmLabel} isAlert={confirmState.isAlert} />
         <Modal isOpen={showObjectModal} onClose={() => setShowObjectModal(false)} title={editingObject ? 'Edit Objek' : 'Tambah Obrik'}><form onSubmit={saveObject} className="space-y-4"><Input name="name" label="Nama Objek Pemeriksaan" defaultValue={editingObject?.name} placeholder="Contoh: LKPD Kab. Badung" required /><div className="border-t pt-4 border-slate-100"><label className="block text-xs font-bold text-slate-700 mb-2">Konfigurasi Slot Tim</label><div className="grid grid-cols-2 gap-3">{ROLES.map(r => (<div key={r.key} className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-200"><span className="text-xs font-medium text-slate-600 w-1/2">{r.label} ({r.short})</span><input type="number" name={`slot_${r.key}`} min="0" className="w-16 text-center text-sm border rounded p-1" defaultValue={editingObject ? (editingObject.slots[r.key] || 0) : (r.key === 'PJ' || r.key === 'KT' ? 1 : 0)} /></div>))}</div></div><div className="flex justify-end gap-2 mt-6"><Button type="submit" variant="gold">Simpan</Button><Button type="button" variant="ghost" onClick={() => setShowObjectModal(false)}>Batal</Button></div></form></Modal>
-        <Modal isOpen={showExaminerModal} onClose={() => setShowExaminerModal(false)} title={editingExaminer ? 'Edit Pemeriksa' : 'Tambah Pemeriksa'}><form onSubmit={saveExaminer} className="space-y-4"><Input name="nip_bpk" label="NIP BPK" defaultValue={editingExaminer?.nip_bpk} required /><Input name="nip_18" label="NIP 18 Digit" defaultValue={editingExaminer?.nip_18} required /><Input name="name" label="Nama Lengkap" defaultValue={editingExaminer?.name} required /><Input name="jabatan" label="Jabatan" defaultValue={editingExaminer?.jabatan} required /><Input name="edu" label="Latar Pendidikan" defaultValue={editingExaminer?.edu} required /><div className="flex justify-end gap-2 mt-6"><Button type="submit" variant="gold">Simpan</Button><Button type="button" variant="ghost" onClick={() => setShowExaminerModal(false)}>Batal</Button></div></form></Modal>
+        <Modal isOpen={showExaminerModal} onClose={() => setShowExaminerModal(false)} title={editingExaminer ? 'Edit Pemeriksa' : 'Tambah Pemeriksa'}>
+            <ExaminerForm 
+                initialData={editingExaminer} 
+                masterData={masterExaminers} 
+                onSave={saveExaminer} 
+                onCancel={() => setShowExaminerModal(false)} 
+            />
+        </Modal>
         <Modal isOpen={statusReasonModal.open} onClose={() => setStatusReasonModal({open: false})} title="Alasan Non-Aktif"><p className="text-sm text-slate-500 mb-2">Mengapa pemeriksa ini tidak bisa mengikuti pemeriksaan?</p><textarea className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:border-amber-500 focus:outline-none" rows="3" placeholder="Contoh: Cuti Melahirkan, Diklat..." value={tempReason} onChange={e => setTempReason(e.target.value)}></textarea><div className="flex justify-end gap-2 mt-4"><Button variant="danger" onClick={confirmStatusReason}>Non-Aktifkan</Button><Button onClick={() => setStatusReasonModal({open: false})}>Batal</Button></div></Modal>
         {contextMenu.visible && (
           <>
