@@ -652,7 +652,7 @@ export default function TeamManager() {
     const h = String(now.getHours()).padStart(2,'0'); const m = String(now.getMinutes()).padStart(2,'0'); const s = String(now.getSeconds()).padStart(2,'0');
     const statusObj = PROJECT_STATUSES.find(st => st.id === statusId);
     const shortStatus = statusObj ? statusObj.shortCode : 'Draft';
-    link.download = `SUNTIM_${projectTitle}_${Y}-${M}-${D}_${h}${m}${s}_${shortStatus}.suntim`; 
+    link.download = `SUNTIM_${projectTitle}_${shortStatus}.suntim`; 
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
     setShowStatusModal(false);
   };
@@ -705,7 +705,7 @@ export default function TeamManager() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `SUNTIM_${projectTitle}_${timestamp}_${statusLabel}.xls`;
+        link.download = `SUNTIM_${projectTitle}_${statusLabel}.xls`;
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
     } 
     else if (type === 'pdf') {
@@ -1118,7 +1118,7 @@ export default function TeamManager() {
              doc.text(`Halaman ${i} dari ${totalPages}`, pageWidth - 14, pageHeight - 10, { align: 'right' });
         }
 
-        doc.save(`SUNTIM_${projectTitle}_${timestamp}_${statusLabel}.pdf`);
+        doc.save(`SUNTIM_${projectTitle}_${statusLabel}.pdf`);
        } catch (err) {
            console.error("PDF Fail:", err);
            alert("Gagal membuat PDF. Cek console untuk detail.");
@@ -1164,9 +1164,11 @@ export default function TeamManager() {
     setAssignments(prev => {
         const next = JSON.parse(JSON.stringify(prev));
         if(!next[tObjId]) next[tObjId] = {};
-        if(!next[sourceObjId]) next[sourceObjId] = {};
         
-        delete next[sourceObjId][`${sourceRole}_${sourceIndex}`]; // Remove from source
+        if (sourceObjId !== 'unassigned') {
+             if(!next[sourceObjId]) next[sourceObjId] = {};
+             delete next[sourceObjId][`${sourceRole}_${sourceIndex}`]; // Remove from source
+        }
 
         if (isGap) {
             // INSERT LOGIC
@@ -1189,7 +1191,9 @@ export default function TeamManager() {
         } else {
             // SWAP LOGIC
             const targetEx = getExaminerInSlot(tObjId, tRole, tIdx);
-            if(targetEx) next[sourceObjId][`${sourceRole}_${sourceIndex}`] = targetEx.id;
+            if(targetEx && sourceObjId !== 'unassigned') {
+                next[sourceObjId][`${sourceRole}_${sourceIndex}`] = targetEx.id;
+            }
             next[tObjId][`${tRole}_${tIdx}`] = examiner.id;
         }
         return next;
@@ -1198,6 +1202,145 @@ export default function TeamManager() {
   };
   const removeAssignment = (objId, rKey, idx) => { setAssignments(prev=>{ const n={...prev}; if(n[objId]){ const no={...n[objId]}; delete no[`${rKey}_${idx}`]; n[objId]=no; } return n; }); };
   const handleContextMenu = (e, exId, objId, slotKey) => { setContextMenu({ visible: true, x: e.clientX, y: e.clientY, examinerId: exId, sourceObjId: objId, sourceKey: slotKey }); setMoveSubMenu(null); setSelectedTargetObjId(null); };
+
+  // --- Add/Delete Slot Logic ---
+  const [addSlotPopup, setAddSlotPopup] = useState({ visible: false, x: 0, y: 0, objId: null, roleKey: null, index: -1, options: [] });
+
+  const handleDeleteSlot = (objId, roleKey, index) => {
+    // Delete slot: remove assignment and shift others up
+    setAssignments(prev => {
+        const next = JSON.parse(JSON.stringify(prev));
+        if (!next[objId]) return next;
+        
+        delete next[objId][`${roleKey}_${index}`];
+        
+        const assignmentsToShift = [];
+        Object.keys(next[objId]).forEach(key => {
+            const parts = key.split('_');
+            const r = parts[0];
+            const i = parseInt(parts[1]);
+            if (r === roleKey && i > index) {
+                assignmentsToShift.push({ key, i, val: next[objId][key] });
+            }
+        });
+        assignmentsToShift.sort((a, b) => a.i - b.i);
+        assignmentsToShift.forEach(item => {
+            delete next[objId][item.key];
+            next[objId][`${roleKey}_${item.i - 1}`] = item.val;
+        });
+        return next;
+    });
+
+    // Decrease slot count
+    setObjects(prev => prev.map(obj => {
+        if (obj.id !== objId) return obj;
+        const newSlots = { ...obj.slots };
+        newSlots[roleKey] = Math.max(0, (newSlots[roleKey] || 0) - 1);
+        return { ...obj, slots: newSlots };
+    }));
+  };
+
+
+  const handleGapClick = (e, objId, roleKey, index) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const roleIdx = ROLES.findIndex(r => r.key === roleKey);
+    const options = [ROLES[roleIdx]]; 
+    if (index === 0 && roleIdx > 0) {
+        options.unshift(ROLES[roleIdx - 1]);
+    }
+    setAddSlotPopup({ visible: true, x: e.clientX, y: e.clientY, objId, roleKey, index, options });
+  };
+
+  const confirmAddSlot = (selectedRoleKey) => {
+      const { objId, roleKey, index } = addSlotPopup;
+      setObjects(prev => prev.map(obj => {
+          if (obj.id !== objId) return obj;
+          const newSlots = { ...obj.slots };
+          newSlots[selectedRoleKey] = (newSlots[selectedRoleKey] || 0) + 1;
+          return { ...obj, slots: newSlots };
+      }));
+      
+      // Shift assignments if inserting into same role
+      if (selectedRoleKey === roleKey) {
+          setAssignments(prev => {
+              const next = JSON.parse(JSON.stringify(prev));
+              if (!next[objId]) return next;
+              const assignmentsToShift = [];
+              Object.keys(next[objId]).forEach(key => {
+                  const parts = key.split('_');
+                  const r = parts[0];
+                  const i = parseInt(parts[1]);
+                  if (r === roleKey && i >= index) {
+                      assignmentsToShift.push({ key, i, val: next[objId][key] });
+                  }
+              });
+              assignmentsToShift.sort((a, b) => b.i - a.i);
+              assignmentsToShift.forEach(item => {
+                  delete next[objId][item.key];
+                  next[objId][`${roleKey}_${item.i + 1}`] = item.val;
+              });
+              return next;
+          });
+      }
+      setAddSlotPopup(prev => ({ ...prev, visible: false }));
+  };
+
+  const handleChangeRole = (newRoleKey) => {
+      const { sourceObjId, examinerId, sourceKey } = contextMenu;
+      const targetObjId = sourceObjId;
+      
+      setAssignments(prev => {
+          const next = JSON.parse(JSON.stringify(prev));
+          if (!next[targetObjId]) next[targetObjId] = {};
+          
+          if (next[sourceObjId]) {
+              delete next[sourceObjId][sourceKey];
+          }
+
+          let targetIndex = -1;
+          const targetObjSlots = objects.find(o => o.id === targetObjId).slots[newRoleKey] || 0;
+          
+          for (let i = 0; i < targetObjSlots; i++) {
+              if (!next[targetObjId][`${newRoleKey}_${i}`]) {
+                  targetIndex = i;
+                  break;
+              }
+          }
+
+          if (targetIndex === -1) {
+              targetIndex = targetObjSlots; 
+          }
+          
+          next[targetObjId][`${newRoleKey}_${targetIndex}`] = examinerId;
+          return next;
+      });
+
+      const targetObj = objects.find(o => o.id === targetObjId);
+      const currentSlots = targetObj.slots[newRoleKey] || 0;
+      
+      const currentAssignments = assignments[targetObjId] || {};
+      let indexToAssign = -1;
+      for (let i=0; i<currentSlots; i++) {
+          if (!currentAssignments[`${newRoleKey}_${i}`]) {
+              indexToAssign = i;
+              break;
+          }
+      }
+      if (indexToAssign === -1) indexToAssign = currentSlots;
+      
+      if (indexToAssign >= currentSlots) {
+          setObjects(prev => prev.map(o => {
+              if (o.id !== targetObjId) return o;
+              const newSlots = { ...o.slots };
+              newSlots[newRoleKey] = (newSlots[newRoleKey] || 0) + 1;
+              return { ...o, slots: newSlots };
+          }));
+      }
+
+      setContextMenu({ visible: false, x: 0, y: 0, examinerId: null, sourceObjId: null, sourceKey: null });
+  };
+
   const selectTargetObjectForMove = (id) => { setSelectedTargetObjId(id); setMoveSubMenu('move_role_select'); };
   const executeMoveFinal = (roleKey) => { /* ... move logic ... */ 
       if(!selectedTargetObjId) return;
@@ -1536,7 +1679,7 @@ export default function TeamManager() {
                     <button className="text-slate-400 hover:text-white hover:bg-slate-700/50 p-1.5 rounded" onClick={() => deleteObject(obj.id)}><Trash2 className="w-3 h-3 text-red-400" /></button>
                  </div>
               </div>
-              <div className="p-2 space-y-1 relative z-10">
+              <div className="p-2 space-y-0 relative z-10">
                 {ROLES.map(role => {
                   const count = obj.slots[role.key];
                   if (count === 0) return null;
@@ -1544,14 +1687,38 @@ export default function TeamManager() {
                     const examiner = getExaminerInSlot(obj.id, role.key, idx);
                     return (
                         <React.Fragment key={`${role.key}-${idx}`}>
-                           <div className="h-2 -my-1 w-full z-20" data-is-gap="true" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}></div>
-                           <div className="flex items-center gap-2 relative" onDragOver={e => e.preventDefault()} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}>
-                            <div className={`w-10 shrink-0 text-[10px] py-1 text-center rounded font-bold uppercase ${role.color}`}>{role.short}</div>
+                           <div 
+                                className="h-2 -my-1 hover:h-6 hover:-my-3 w-full z-20 relative group/gap cursor-pointer transition-all duration-200" 
+                                data-is-gap="true" 
+                                onDragOver={(e) => e.preventDefault()} 
+                                onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}
+                                onClick={(e) => handleGapClick(e, obj.id, role.key, idx)}
+                           >
+                             <div className="absolute inset-0 flex items-center justify-end pr-4 pointer-events-none">
+                                <div 
+                                    className="opacity-0 group-hover/gap:opacity-100 transform scale-0 group-hover/gap:scale-100 transition-all duration-200 bg-amber-500 text-white rounded-full w-5 h-5 flex items-center justify-center shadow-lg border-2 border-white z-30"
+                                    title="Tambah Slot Peran"
+                                >
+                                    <Plus className="w-3 h-3" />
+                                </div>
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-2 relative py-0.5" onDragOver={e => e.preventDefault()} onDrop={(e) => handleDrop(e, obj.id, role.key, idx)}>
+                            <div className={`w-10 shrink-0 text-[10px] py-1 text-center rounded font-bold uppercase ${role.color} relative group/label cursor-pointer`}>
+                                <span className="group-hover/label:opacity-0 transition-opacity">{role.short}</span>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteSlot(obj.id, role.key, idx); }}
+                                    className="absolute inset-0 flex items-center justify-center bg-red-500 text-white rounded opacity-0 group-hover/label:opacity-100 transition-opacity"
+                                    title="Hapus Slot"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </div>
                             <div className="flex-1 min-w-0 relative"> 
                               {examiner ? (
                                 <div draggable onDragStart={() => { dragItem.current = { examiner, sourceObjId: obj.id, sourceRole: role.key, sourceIndex: idx }; }} className="group bg-white border border-slate-200 rounded p-1 shadow-sm flex items-center gap-2 hover:border-amber-400 cursor-grab active:cursor-grabbing">
                                   <GripVertical className="w-3 h-3 text-slate-300" />
-                                  <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0 overflow-hidden">
+                                  <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0 overflow-hidden">
                                       <img src={examiner.photo || (examiner.nip_bpk ? `https://sisdm.bpk.go.id/photo/${examiner.nip_bpk}/md.jpg` : "icon.jpg")} alt={getInitials(examiner.name)} className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.parentNode.innerText = getInitials(examiner.name); }} />
                                   </div>
                                   <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleContextMenu(e, examiner.id, obj.id, `${role.key}_${idx}`); }}><div className="text-xs font-semibold text-slate-800 truncate">{examiner.name}</div></div>
@@ -1571,11 +1738,37 @@ export default function TeamManager() {
         </div>
         {/* Floating Monitor */}
         <div className="fixed bottom-8 right-8 z-50">
-          <button onClick={() => setIsMonitorOpen(!isMonitorOpen)} className={`flex items-center justify-center w-14 h-14 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95 ${unassigned.length > 0 ? 'bg-amber-500 text-white animate-pulse' : 'bg-green-500 text-white'}`}>{unassigned.length > 0 ? <AlertTriangle className="w-7 h-7" /> : <CheckCircle2 className="w-7 h-7" />}</button>
+          <button onClick={() => setIsMonitorOpen(!isMonitorOpen)} className={`relative flex items-center justify-center w-14 h-14 rounded-full shadow-xl transition-all hover:scale-105 active:scale-95 ${unassigned.length > 0 ? 'bg-amber-500 text-white animate-pulse' : 'bg-green-500 text-white'}`}>
+             {unassigned.length > 0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">{unassigned.length}</span>}
+             {unassigned.length > 0 ? <AlertTriangle className="w-7 h-7" /> : <CheckCircle2 className="w-7 h-7" />}
+          </button>
           {isMonitorOpen && (
             <div className="absolute bottom-16 right-0 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-5">
               <div className={`p-3 font-bold text-sm flex justify-between items-center ${unassigned.length > 0 ? 'bg-amber-50 text-amber-800' : 'bg-green-50 text-green-800'}`}>{unassigned.length > 0 ? `Belum Terplot (${unassigned.length})` : 'Semua Terplot!'}<button onClick={() => setIsMonitorOpen(false)}><X className="w-4 h-4 opacity-50 hover:opacity-100"/></button></div>
-              <div className="max-h-[400px] overflow-y-auto custom-scrollbar p-1">{unassigned.length > 0 ? (unassigned.map(ex => <div key={ex.id} className="p-2 flex items-center gap-2 hover:bg-slate-50 border-b border-slate-50 last:border-0"><div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500">{getInitials(ex.name)}</div><div className="min-w-0"><div className="text-xs font-semibold text-slate-800 truncate">{ex.name}</div><div className="text-[9px] text-slate-500 truncate">{ex.jabatan}</div></div></div>)) : <div className="p-4 text-center text-xs text-slate-400 italic">Great job! Semua personil aktif sudah masuk tim.</div>}</div>
+              <div className="max-h-[400px] overflow-y-auto custom-scrollbar p-1">
+                {unassigned.length > 0 ? (
+                    unassigned.map(ex => (
+                        <div 
+                            key={ex.id} 
+                            className="p-2 flex items-center gap-2 hover:bg-slate-50 border-b border-slate-50 last:border-0 cursor-grab active:cursor-grabbing"
+                            draggable
+                            onDragStart={() => { 
+                                dragItem.current = { examiner: ex, sourceObjId: 'unassigned', sourceRole: null, sourceIndex: null }; 
+                                // Delay closing to prevent drag cancellation (because source element disappeared)
+                                setTimeout(() => setIsMonitorOpen(false), 50); 
+                            }}
+                        >
+                            <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500">{getInitials(ex.name)}</div>
+                            <div className="min-w-0">
+                                <div className="text-xs font-semibold text-slate-800 truncate">{ex.name}</div>
+                                <div className="text-[9px] text-slate-500 truncate">{ex.jabatan}</div>
+                            </div>
+                        </div>
+                    ))
+                ) : (
+                    <div className="p-4 text-center text-xs text-slate-400 italic">Great job! Semua personil aktif sudah masuk tim.</div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1771,12 +1964,54 @@ export default function TeamManager() {
                 );
               })()}
               <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 text-xs font-bold text-slate-500">Opsi Perpindahan</div>
-              {moveSubMenu === null && (<div className="p-1"><button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('move_target_list'); }}><span>Pindahkan ke...</span><ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button><button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('swap_target_list'); }}><span>Tukar dengan...</span><ArrowRightLeft className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button><div className="border-t border-slate-100 my-1"></div><button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded flex gap-2 items-center" onClick={() => { removeAssignment(contextMenu.sourceObjId, contextMenu.sourceKey.split('_')[0], contextMenu.sourceKey.split('_')[1]); setContextMenu({...contextMenu, visible:false}); }}><LogOut className="w-4 h-4"/> Lepas dari Tim</button></div>)}
+              {moveSubMenu === null && (
+                <div className="p-1">
+                  <button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('change_role_select'); }}><span>Ubah Peran...</span><ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button>
+                  <button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('move_target_list'); }}><span>Pindahkan ke...</span><ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button>
+                  <button className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex justify-between items-center group" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('swap_target_list'); }}><span>Tukar dengan...</span><ArrowRightLeft className="w-4 h-4 text-slate-400 group-hover:text-amber-500"/></button>
+                  <div className="border-t border-slate-100 my-1"></div>
+                  <button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded flex gap-2 items-center" onClick={() => { removeAssignment(contextMenu.sourceObjId, contextMenu.sourceKey.split('_')[0], contextMenu.sourceKey.split('_')[1]); setContextMenu({...contextMenu, visible:false}); }}><LogOut className="w-4 h-4"/> Lepas dari Tim</button>
+                </div>
+              )}
+              {moveSubMenu === 'change_role_select' && (
+                <div className="p-1 max-h-60 overflow-y-auto">
+                    <button className="w-full text-left px-2 py-1 text-xs text-slate-400 mb-1 flex items-center" onClick={(e) => { e.stopPropagation(); setMoveSubMenu(null); }}><ChevronDown className="w-3 h-3 rotate-90 mr-1"/> Kembali</button>
+                    {ROLES.filter(r => r.key !== contextMenu.sourceKey.split('_')[0]).map(role => (
+                        <button key={role.key} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex items-center gap-2" onClick={() => handleChangeRole(role.key)}>
+                            <div className={`w-2 h-2 rounded-full ${role.color.split(' ')[0]}`}></div>
+                            <span>{role.label}</span>
+                        </button>
+                    ))}
+                </div>
+              )}
               {moveSubMenu === 'move_target_list' && (<div className="p-1 max-h-60 overflow-y-auto"><button className="w-full text-left px-2 py-1 text-xs text-slate-400 mb-1 flex items-center" onClick={(e) => { e.stopPropagation(); setMoveSubMenu(null); }}><ChevronDown className="w-3 h-3 rotate-90 mr-1"/> Kembali</button>{objects.filter(o => o.id !== contextMenu.sourceObjId).map(obj => (<button key={obj.id} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-green-50 rounded border-b border-slate-50 last:border-0" onClick={() => selectTargetObjectForMove(obj.id)}><div className="font-semibold">{obj.name}</div></button>))}{objects.length <= 1 && <div className="p-3 text-center text-xs text-slate-400">Tidak ada tim lain tersedia.</div>}</div>)}
               {moveSubMenu === 'move_role_select' && selectedTargetObjId && (<div className="p-1 max-h-60 overflow-y-auto"><button className="w-full text-left px-2 py-1 text-xs text-slate-400 mb-1 flex items-center" onClick={(e) => { e.stopPropagation(); setMoveSubMenu('move_target_list'); }}><ChevronDown className="w-3 h-3 rotate-90 mr-1"/> Pilih Tim Lain</button><div className="px-2 py-1 bg-amber-50 text-[10px] font-bold text-slate-500 uppercase mb-1 rounded">Pilih Peran:</div>{ROLES.map(role => {const obj = objects.find(o => o.id === selectedTargetObjId);const capacity = obj.slots[role.key] || 0;if (capacity === 0) return null; let available = false;for (let i = 0; i < capacity; i++) {if (!assignments[selectedTargetObjId]?.[`${role.key}_${i}`]) {available = true;break;}}if (!available) return null; return (<button key={role.key} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-green-50 rounded border-b border-slate-50 flex items-center gap-2" onClick={() => executeMoveFinal(role.key)}><div className={`w-2 h-2 rounded-full ${role.color.split(' ')[0]}`}></div><span>{role.label}</span></button>)})}{ROLES.every(role => {const obj = objects.find(o => o.id === selectedTargetObjId);const capacity = obj.slots[role.key] || 0;let available = false;for (let i = 0; i < capacity; i++) {if (!assignments[selectedTargetObjId]?.[`${role.key}_${i}`]) {available = true;break;}}return !available;}) && <div className="p-3 text-center text-xs text-red-400">Tim ini penuh.</div>}</div>)}
               {moveSubMenu === 'swap_target_list' && (<div className="p-1 max-h-60 overflow-y-auto"><button className="w-full text-left px-2 py-1 text-xs text-slate-400 mb-1 flex items-center" onClick={(e) => { e.stopPropagation(); setMoveSubMenu(null); }}><ChevronDown className="w-3 h-3 rotate-90 mr-1"/> Kembali</button>{objects.filter(o => o.id !== contextMenu.sourceObjId).map(obj => (<div key={obj.id} className="mb-1"><div className="px-2 py-1 bg-slate-100 text-[10px] font-bold text-slate-500 uppercase">{obj.name}</div>{(() => {const assignedInObj = assignments[obj.id] || {};const peopleIds = Object.values(assignedInObj);if (peopleIds.length === 0) return <div className="px-3 py-1 text-xs text-slate-400 italic">Tim Kosong</div>;return peopleIds.map(pid => {const p = examiners.find(e => e.id === pid);const slotKey = Object.keys(assignedInObj).find(key => assignedInObj[key] === pid);const roleKey = slotKey ? slotKey.split('_')[0] : '';const roleData = ROLES.find(r => r.key === roleKey);return <button key={pid} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-amber-50 flex items-center gap-2" onClick={() => executeSwap(obj.id, pid)}><span className={`text-[10px] w-8 text-center py-0.5 rounded font-bold ${roleData?.color}`}>{roleData?.short}</span><span className="truncate">{p.name}</span></button>});})()}</div>))}{objects.length <= 1 && <div className="p-3 text-center text-xs text-slate-400">Tidak ada tim lain tersedia.</div>}</div>)}
             </div>
           </>
+        )}
+        {addSlotPopup.visible && (
+            <React.Fragment>
+                <div className="fixed inset-0 z-40" onClick={() => setAddSlotPopup({ ...addSlotPopup, visible: false })} />
+                <div 
+                    className="fixed z-50 bg-white rounded-lg shadow-xl border border-slate-200 w-48 overflow-hidden animate-in fade-in zoom-in-95 duration-100 p-1"
+                    style={{ top: addSlotPopup.y, left: addSlotPopup.x }}
+                >
+                    <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-100 mb-1">Tambah Slot Peran</div>
+                    {addSlotPopup.options.map(role => (
+                        <button 
+                            key={role.key}
+                            onClick={() => confirmAddSlot(role.key)}
+                            className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-amber-50 rounded flex items-center gap-2"
+                        >
+                             <div className={`w-6 h-4 rounded text-[10px] flex items-center justify-center font-bold uppercase ${role.color}`}>
+                                {role.short}
+                            </div>
+                            <span className="truncate">{role.label}</span>
+                        </button>
+                    ))}
+                </div>
+            </React.Fragment>
         )}
       </div>
     </>
